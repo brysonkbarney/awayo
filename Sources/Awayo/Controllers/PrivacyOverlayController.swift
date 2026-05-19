@@ -250,6 +250,11 @@ final class PrivacyOverlayController: NSObject {
             case .scrollWheel, .swipe, .magnify, .rotate:
                 return nil
             case .keyDown:
+                if event.charactersIgnoringModifiers == " " {
+                    self?.overlayViews.forEach { $0.jumpRunnerIfNeeded() }
+                    return nil
+                }
+
                 let blockedModifiers: NSEvent.ModifierFlags = [.command, .control, .option]
                 if event.modifierFlags.intersection(blockedModifiers).isEmpty {
                     return event

@@ -16,6 +16,7 @@ final class PrivacyOverlayView: NSView {
     private let notesStack = NSStackView()
     private let noteNameField = NSTextField(string: "")
     private let noteMessageField = NSTextField(string: "")
+    private let noteComposerHost = StickyNoteComposerView()
     private let noteComposer = NSStackView()
     private let verifyPasscode: (String) -> Bool
     private let showsUnlockField: Bool
@@ -27,6 +28,9 @@ final class PrivacyOverlayView: NSView {
     private var floatingNoteViews: [StickyNoteCardView] = []
     private var pendingNotePoint: NSPoint?
     private var noteComposerActive = false
+    private var runnerJumpOffset: CGFloat = 0
+    private var runnerVelocity: CGFloat = 0
+    private var runnerScore = 0
     private var style: AwayoLockStyle {
         awayoAppearance.backgroundStyle
     }
@@ -64,7 +68,7 @@ final class PrivacyOverlayView: NSView {
             return hitView
         }
 
-        let interactiveViews: [NSView] = [unlockField, unlockButton, notePanel]
+        let interactiveViews: [NSView] = [unlockField, unlockButton, notePanel, noteComposerHost]
         if interactiveViews.contains(where: { hitView === $0 || hitView.isDescendant(of: $0) }) {
             return hitView
         }
@@ -94,7 +98,7 @@ final class PrivacyOverlayView: NSView {
         }
 
         let point = convert(event.locationInWindow, from: nil)
-        let ignoredViews: [NSView] = [unlockField, unlockButton, notePanel]
+        let ignoredViews: [NSView] = [unlockField, unlockButton, notePanel, noteComposerHost]
         let clickedControl = ignoredViews.contains { view in
             view.convert(view.bounds, to: self).insetBy(dx: -14, dy: -14).contains(point)
         }
@@ -113,6 +117,15 @@ final class PrivacyOverlayView: NSView {
         }
 
         window?.makeFirstResponder(unlockField)
+    }
+
+    func jumpRunnerIfNeeded() {
+        guard style == .offlineRunner, runnerJumpOffset <= 1 else {
+            return
+        }
+
+        runnerVelocity = 21
+        runnerJumpOffset = 2
     }
 
     override func layout() {
@@ -151,10 +164,11 @@ final class PrivacyOverlayView: NSView {
 
     func update(endDate: Date?) {
         if let endDate {
-            countdownLabel.stringValue = DurationFormatter.awayoString(from: max(0, endDate.timeIntervalSinceNow))
+            let value = DurationFormatter.awayoString(from: max(0, endDate.timeIntervalSinceNow))
+            countdownLabel.stringValue = awayoAppearance.timerStyle == .terminalTicker ? "$ \(value)" : value
             backAtLabel.stringValue = "Back around \(endDate.formatted(date: .omitted, time: .shortened))"
         } else {
-            countdownLabel.stringValue = "Running"
+            countdownLabel.stringValue = awayoAppearance.timerStyle == .terminalTicker ? "$ running" : "Running"
             backAtLabel.stringValue = "Until stopped"
         }
     }
@@ -238,11 +252,25 @@ final class PrivacyOverlayView: NSView {
     }
 
     private func makeUnlockRow() -> NSStackView {
+        let unlockPanel = NSStackView()
+        unlockPanel.orientation = .vertical
+        unlockPanel.alignment = .centerX
+        unlockPanel.spacing = 10
+        unlockPanel.edgeInsets = NSEdgeInsets(top: 16, left: 18, bottom: 16, right: 18)
+        unlockPanel.wantsLayer = true
+        unlockPanel.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.28).cgColor
+        unlockPanel.layer?.cornerRadius = 14
+        unlockPanel.layer?.borderWidth = 1
+        unlockPanel.layer?.borderColor = NSColor.white.withAlphaComponent(0.18).cgColor
+
+        let title = NSTextField(labelWithString: "Enter Awayo passcode")
+        title.font = .systemFont(ofSize: 13, weight: .bold)
+        title.textColor = NSColor.white.withAlphaComponent(0.72)
+
         let unlockRow = NSStackView()
         unlockRow.orientation = .horizontal
         unlockRow.alignment = .centerY
-        unlockRow.spacing = 10
-        unlockRow.edgeInsets = NSEdgeInsets(top: 8, left: 0, bottom: 0, right: 0)
+        unlockRow.spacing = 8
 
         unlockField.placeholderString = "Passcode"
         unlockField.font = .systemFont(ofSize: 18, weight: .semibold)
@@ -262,7 +290,9 @@ final class PrivacyOverlayView: NSView {
         unlockRow.addArrangedSubview(unlockButton)
         unlockField.widthAnchor.constraint(equalToConstant: 280).isActive = true
 
-        return unlockRow
+        unlockPanel.addArrangedSubview(title)
+        unlockPanel.addArrangedSubview(unlockRow)
+        return unlockPanel
     }
 
     private func setupNotePanel() {
@@ -302,9 +332,10 @@ final class PrivacyOverlayView: NSView {
         notePanel.addArrangedSubview(subtitle)
         notePanel.addArrangedSubview(notesStack)
         notePanel.addArrangedSubview(leaveButton)
-        notePanel.addArrangedSubview(noteComposer)
 
-        noteComposer.isHidden = true
+        noteComposerHost.isHidden = true
+        noteComposerHost.translatesAutoresizingMaskIntoConstraints = true
+        addSubview(noteComposerHost)
         renderStickyNotes()
 
         NSLayoutConstraint.activate([
@@ -318,14 +349,21 @@ final class PrivacyOverlayView: NSView {
         noteComposer.orientation = .vertical
         noteComposer.alignment = .leading
         noteComposer.spacing = 8
+        noteComposer.edgeInsets = NSEdgeInsets(top: 18, left: 18, bottom: 16, right: 18)
+        noteComposer.translatesAutoresizingMaskIntoConstraints = false
+        noteComposerHost.addSubview(noteComposer)
 
         noteNameField.placeholderString = "Your name"
-        noteNameField.font = .systemFont(ofSize: 13, weight: .medium)
-        noteNameField.widthAnchor.constraint(equalToConstant: 282).isActive = true
+        noteNameField.font = .systemFont(ofSize: 14, weight: .semibold)
+        noteNameField.isBordered = false
+        noteNameField.backgroundColor = .clear
+        noteNameField.widthAnchor.constraint(equalToConstant: 256).isActive = true
 
         noteMessageField.placeholderString = "Leave a note"
-        noteMessageField.font = .systemFont(ofSize: 13, weight: .medium)
-        noteMessageField.widthAnchor.constraint(equalToConstant: 282).isActive = true
+        noteMessageField.font = handwrittenFont(size: 18, weight: .semibold)
+        noteMessageField.isBordered = false
+        noteMessageField.backgroundColor = .clear
+        noteMessageField.widthAnchor.constraint(equalToConstant: 256).isActive = true
 
         let buttonRow = NSStackView()
         buttonRow.orientation = .horizontal
@@ -344,6 +382,13 @@ final class PrivacyOverlayView: NSView {
         noteComposer.addArrangedSubview(noteNameField)
         noteComposer.addArrangedSubview(noteMessageField)
         noteComposer.addArrangedSubview(buttonRow)
+
+        NSLayoutConstraint.activate([
+            noteComposer.leadingAnchor.constraint(equalTo: noteComposerHost.leadingAnchor),
+            noteComposer.trailingAnchor.constraint(equalTo: noteComposerHost.trailingAnchor),
+            noteComposer.topAnchor.constraint(equalTo: noteComposerHost.topAnchor),
+            noteComposer.bottomAnchor.constraint(equalTo: noteComposerHost.bottomAnchor)
+        ])
     }
 
     private func renderStickyNotes() {
@@ -377,7 +422,8 @@ final class PrivacyOverlayView: NSView {
 
     private func activateNoteComposer() {
         noteComposerActive = true
-        noteComposer.isHidden = false
+        noteComposerHost.isHidden = false
+        positionComposerHost()
         noteNameField.stringValue = ""
         noteMessageField.stringValue = ""
         window?.makeFirstResponder(noteNameField)
@@ -385,7 +431,7 @@ final class PrivacyOverlayView: NSView {
 
     @objc private func cancelStickyNote() {
         noteComposerActive = false
-        noteComposer.isHidden = true
+        noteComposerHost.isHidden = true
         window?.makeFirstResponder(unlockField)
     }
 
@@ -406,16 +452,25 @@ final class PrivacyOverlayView: NSView {
         ))
         pendingNotePoint = nil
         noteComposerActive = false
-        noteComposer.isHidden = true
+        noteComposerHost.isHidden = true
         renderStickyNotes()
         renderFloatingNotes()
         window?.makeFirstResponder(unlockField)
+    }
+
+    private func positionComposerHost() {
+        let size = NSSize(width: 292, height: 150)
+        let point = pendingNotePoint ?? NSPoint(x: bounds.midX, y: bounds.midY)
+        let x = min(max(point.x - size.width / 2, 22), max(22, bounds.width - size.width - 22))
+        let y = min(max(point.y - size.height / 2, 22), max(22, bounds.height - size.height - 22))
+        noteComposerHost.frame = NSRect(origin: NSPoint(x: x, y: y), size: size)
     }
 
     private func renderFloatingNotes() {
         floatingNoteViews.forEach { $0.removeFromSuperview() }
         floatingNoteViews = stickyNotes.map { note in
             let card = StickyNoteCardView(note: note, style: awayoAppearance.noteStyle, usesConstraints: false)
+            card.frameCenterRotation = CGFloat((note.colorIndex % 5) - 2) * 1.8
             addSubview(card, positioned: .above, relativeTo: nil)
             return card
         }
@@ -432,6 +487,10 @@ final class PrivacyOverlayView: NSView {
             let x = min(max(note.position.x - size.width / 2, minX), maxX)
             let y = min(max(note.position.y - size.height / 2, minY), maxY)
             view.frame = NSRect(origin: NSPoint(x: x, y: y), size: size)
+        }
+
+        if noteComposerActive {
+            positionComposerHost()
         }
     }
 
@@ -479,14 +538,17 @@ final class PrivacyOverlayView: NSView {
             countdownLabel.textColor = .white
             countdownLabel.layer?.backgroundColor = NSColor.clear.cgColor
         case .paperClock:
+            countdownLabel.layer?.cornerRadius = 10
             countdownLabel.textColor = NSColor(calibratedRed: 0.16, green: 0.12, blue: 0.09, alpha: 1)
             countdownLabel.layer?.backgroundColor = NSColor(calibratedRed: 1.0, green: 0.91, blue: 0.54, alpha: 0.90).cgColor
         case .glassPill:
+            countdownLabel.layer?.cornerRadius = 24
             countdownLabel.textColor = .white
             countdownLabel.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.16).cgColor
             countdownLabel.layer?.borderWidth = 1
             countdownLabel.layer?.borderColor = NSColor.white.withAlphaComponent(0.24).cgColor
         case .terminalTicker:
+            countdownLabel.layer?.cornerRadius = 8
             countdownLabel.textColor = NSColor(calibratedRed: 0.48, green: 1.0, blue: 0.66, alpha: 1)
             countdownLabel.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.42).cgColor
             countdownLabel.layer?.borderWidth = 1
@@ -518,6 +580,10 @@ final class PrivacyOverlayView: NSView {
         case .terminalTicker:
             .monospacedSystemFont(ofSize: compact ? 34 : 56, weight: .bold)
         }
+    }
+
+    private func handwrittenFont(size: CGFloat, weight: NSFont.Weight) -> NSFont {
+        NSFont(name: "Marker Felt", size: size) ?? .systemFont(ofSize: size, weight: weight)
     }
 
     private func configurePillLabel(_ label: NSTextField, foreground: NSColor, background: NSColor) {
@@ -569,7 +635,25 @@ final class PrivacyOverlayView: NSView {
 
     @objc private func animationTimerFired() {
         animationPhase += 0.016
+        updateRunnerPhysics()
         needsDisplay = true
+    }
+
+    private func updateRunnerPhysics() {
+        guard style == .offlineRunner else {
+            return
+        }
+
+        runnerScore = Int(animationPhase * 8)
+        if runnerJumpOffset > 0 || runnerVelocity > 0 {
+            runnerJumpOffset = max(0, runnerJumpOffset + runnerVelocity)
+            runnerVelocity -= 1.18
+
+            if runnerJumpOffset <= 0 {
+                runnerJumpOffset = 0
+                runnerVelocity = 0
+            }
+        }
     }
 
     @objc private func checkPasscode() {
@@ -595,9 +679,9 @@ final class PrivacyOverlayView: NSView {
 
     private func drawDuckPond(in rect: NSRect) {
         drawGradient(in: rect, colors: [
-            NSColor(calibratedRed: 0.42, green: 0.76, blue: 0.85, alpha: 1),
-            NSColor(calibratedRed: 0.08, green: 0.40, blue: 0.48, alpha: 1),
-            NSColor(calibratedRed: 0.02, green: 0.16, blue: 0.23, alpha: 1)
+            NSColor(calibratedRed: 0.70, green: 0.91, blue: 0.94, alpha: 1),
+            NSColor(calibratedRed: 0.13, green: 0.55, blue: 0.62, alpha: 1),
+            NSColor(calibratedRed: 0.02, green: 0.20, blue: 0.27, alpha: 1)
         ], angle: -90)
 
         drawSun(in: rect)
@@ -608,9 +692,9 @@ final class PrivacyOverlayView: NSView {
 
     private func drawOfflineRunner(in rect: NSRect) {
         drawGradient(in: rect, colors: [
-            NSColor(calibratedRed: 0.93, green: 0.86, blue: 0.69, alpha: 1),
-            NSColor(calibratedRed: 0.88, green: 0.68, blue: 0.42, alpha: 1),
-            NSColor(calibratedRed: 0.16, green: 0.13, blue: 0.14, alpha: 1)
+            NSColor(calibratedRed: 0.96, green: 0.92, blue: 0.80, alpha: 1),
+            NSColor(calibratedRed: 0.90, green: 0.76, blue: 0.52, alpha: 1),
+            NSColor(calibratedRed: 0.22, green: 0.18, blue: 0.16, alpha: 1)
         ], angle: -90)
 
         let groundY = rect.height * 0.28
@@ -618,6 +702,7 @@ final class PrivacyOverlayView: NSView {
         drawCacti(in: rect, groundY: groundY)
         drawPixelRunner(in: rect, groundY: groundY)
         drawPixelClouds(in: rect)
+        drawRunnerScore(in: rect)
     }
 
     private func drawCosmicDesk(in rect: NSRect) {
@@ -779,24 +864,39 @@ final class PrivacyOverlayView: NSView {
         transform.scale(by: scale)
         transform.concat()
 
-        NSColor(calibratedRed: 0.98, green: 0.79, blue: 0.22, alpha: 1).setFill()
-        NSBezierPath(ovalIn: NSRect(x: -36, y: -18, width: 86, height: 44)).fill()
-        NSBezierPath(ovalIn: NSRect(x: 20, y: 12, width: 36, height: 34)).fill()
+        NSColor.black.withAlphaComponent(0.10).setFill()
+        NSBezierPath(ovalIn: NSRect(x: -52, y: -28, width: 122, height: 28)).fill()
+
+        NSColor(calibratedRed: 1.00, green: 0.80, blue: 0.20, alpha: 1).setFill()
+        let body = NSBezierPath()
+        body.move(to: NSPoint(x: -48, y: -4))
+        body.curve(to: NSPoint(x: -16, y: 24), controlPoint1: NSPoint(x: -46, y: 16), controlPoint2: NSPoint(x: -32, y: 26))
+        body.curve(to: NSPoint(x: 38, y: 18), controlPoint1: NSPoint(x: 4, y: 24), controlPoint2: NSPoint(x: 28, y: 24))
+        body.curve(to: NSPoint(x: 58, y: -2), controlPoint1: NSPoint(x: 50, y: 12), controlPoint2: NSPoint(x: 58, y: 6))
+        body.curve(to: NSPoint(x: 6, y: -22), controlPoint1: NSPoint(x: 46, y: -20), controlPoint2: NSPoint(x: 24, y: -26))
+        body.curve(to: NSPoint(x: -48, y: -4), controlPoint1: NSPoint(x: -16, y: -24), controlPoint2: NSPoint(x: -40, y: -16))
+        body.close()
+        body.fill()
+
+        NSColor(calibratedRed: 1.00, green: 0.88, blue: 0.30, alpha: 1).setFill()
+        NSBezierPath(ovalIn: NSRect(x: 22, y: 16, width: 38, height: 36)).fill()
+        NSColor(calibratedRed: 0.93, green: 0.61, blue: 0.08, alpha: 1).setFill()
+        NSBezierPath(ovalIn: NSRect(x: -16, y: -4, width: 44, height: 22)).fill()
 
         NSColor(calibratedRed: 1.00, green: 0.44, blue: 0.12, alpha: 1).setFill()
         let beak = NSBezierPath()
-        beak.move(to: NSPoint(x: 54, y: 26))
-        beak.line(to: NSPoint(x: 78, y: 19))
-        beak.line(to: NSPoint(x: 54, y: 14))
+        beak.move(to: NSPoint(x: 56, y: 35))
+        beak.line(to: NSPoint(x: 82, y: 29))
+        beak.line(to: NSPoint(x: 56, y: 23))
         beak.close()
         beak.fill()
 
         NSColor.black.withAlphaComponent(0.72).setFill()
-        NSBezierPath(ovalIn: NSRect(x: 42, y: 27, width: 5, height: 5)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 45, y: 38, width: 5, height: 5)).fill()
 
         if parent {
-            NSColor.white.withAlphaComponent(0.22).setFill()
-            NSBezierPath(ovalIn: NSRect(x: -10, y: -7, width: 44, height: 22)).fill()
+            NSColor.white.withAlphaComponent(0.24).setFill()
+            NSBezierPath(ovalIn: NSRect(x: -13, y: 1, width: 38, height: 17)).fill()
         }
 
         NSGraphicsContext.restoreGraphicsState()
@@ -818,23 +918,25 @@ final class PrivacyOverlayView: NSView {
 
     private func drawRunnerGround(in rect: NSRect, groundY: CGFloat) {
         let ground = NSBezierPath()
-        ground.move(to: NSPoint(x: 0, y: groundY))
-        ground.line(to: NSPoint(x: rect.width, y: groundY))
-        ground.lineWidth = 5
-        NSColor(calibratedRed: 0.20, green: 0.16, blue: 0.14, alpha: 0.65).setStroke()
+        ground.move(to: NSPoint(x: rect.minX, y: groundY))
+        ground.line(to: NSPoint(x: rect.maxX, y: groundY))
+        ground.lineWidth = 4
+        NSColor(calibratedRed: 0.18, green: 0.15, blue: 0.13, alpha: 0.70).setStroke()
         ground.stroke()
 
-        let dashOffset = (animationPhase * 170).truncatingRemainder(dividingBy: 44)
-        for x in stride(from: -dashOffset, through: rect.width, by: 44) {
-            NSColor(calibratedRed: 0.20, green: 0.16, blue: 0.14, alpha: 0.42).setFill()
-            NSRect(x: x, y: groundY - 16, width: 20, height: 4).fill()
+        let dashOffset = (animationPhase * 260).truncatingRemainder(dividingBy: 52)
+        for x in stride(from: rect.minX - dashOffset, through: rect.maxX, by: 52) {
+            NSColor(calibratedRed: 0.18, green: 0.15, blue: 0.13, alpha: 0.38).setFill()
+            NSRect(x: x, y: groundY - 18, width: 24, height: 4).fill()
         }
     }
 
     private func drawCacti(in rect: NSRect, groundY: CGFloat) {
-        for index in 0..<5 {
-            let x = rect.width - (animationPhase * CGFloat(140 + index * 18)).truncatingRemainder(dividingBy: rect.width + 240) + CGFloat(index * 190)
-            drawCactus(at: NSPoint(x: x, y: groundY), scale: CGFloat(0.8 + Double(index % 3) * 0.18))
+        for index in 0..<6 {
+            let speed = CGFloat(210 + index * 11)
+            let laneOffset = CGFloat(index * 260)
+            let x = rect.maxX - (animationPhase * speed + laneOffset).truncatingRemainder(dividingBy: rect.width + 360)
+            drawCactus(at: NSPoint(x: x, y: groundY), scale: CGFloat(0.9 + Double(index % 3) * 0.16))
         }
     }
 
@@ -853,28 +955,40 @@ final class PrivacyOverlayView: NSView {
 
     private func drawPixelRunner(in rect: NSRect, groundY: CGFloat) {
         let x = rect.width * 0.25
-        let hop = abs(sin(animationPhase * 7)) * 24
-        let y = groundY + hop
-        NSColor(calibratedRed: 0.13, green: 0.11, blue: 0.10, alpha: 0.82).setFill()
-        let s: CGFloat = 10
+        let runBob = runnerJumpOffset == 0 ? abs(sin(animationPhase * 10)) * 7 : 0
+        let y = groundY + runnerJumpOffset + runBob
+        NSColor(calibratedRed: 0.12, green: 0.10, blue: 0.09, alpha: 0.90).setFill()
+        let s: CGFloat = rect.width < 900 ? 9 : 11
         [
-            NSRect(x: x, y: y + 30, width: s * 4, height: s * 4),
-            NSRect(x: x + s * 3, y: y + 54, width: s * 3, height: s * 2),
-            NSRect(x: x + s * 6, y: y + 50, width: s, height: s),
-            NSRect(x: x + s, y: y + 12, width: s, height: s * 2),
-            NSRect(x: x + s * 3, y: y + 8, width: s, height: s * 2),
-            NSRect(x: x - s, y: y + 34, width: s, height: s * 2)
+            NSRect(x: x, y: y + s * 2, width: s * 7, height: s * 7),
+            NSRect(x: x + s * 5, y: y + s * 7, width: s * 6, height: s * 5),
+            NSRect(x: x + s * 10, y: y + s * 6, width: s * 2, height: s * 2),
+            NSRect(x: x - s * 2, y: y + s * 4, width: s * 4, height: s * 2),
+            NSRect(x: x + s * 1.5, y: y, width: s * 1.3, height: s * 4),
+            NSRect(x: x + s * 5.2, y: y, width: s * 1.3, height: s * 4),
+            NSRect(x: x + s * 6.4, y: y + s * 10.6, width: s, height: s)
         ].forEach { $0.fill() }
+
+        NSColor(calibratedRed: 0.96, green: 0.92, blue: 0.80, alpha: 1).setFill()
+        NSRect(x: x + s * 8.6, y: y + s * 10.4, width: s * 0.9, height: s * 0.9).fill()
     }
 
     private func drawPixelClouds(in rect: NSRect) {
         for index in 0..<4 {
-            let x = rect.width - (animationPhase * CGFloat(24 + index * 5)).truncatingRemainder(dividingBy: rect.width + 180) + CGFloat(index * 240)
+            let x = rect.width - (animationPhase * CGFloat(34 + index * 5)).truncatingRemainder(dividingBy: rect.width + 180) + CGFloat(index * 240)
             let y = rect.height * (0.65 + CGFloat(index % 2) * 0.10)
             NSColor.white.withAlphaComponent(0.36).setFill()
             NSRect(x: x, y: y, width: 72, height: 12).fill()
             NSRect(x: x + 18, y: y + 12, width: 32, height: 12).fill()
         }
+    }
+
+    private func drawRunnerScore(in rect: NSRect) {
+        let score = "SCORE \(runnerScore)"
+        score.draw(in: NSRect(x: rect.maxX - 190, y: rect.maxY - 58, width: 150, height: 26), withAttributes: [
+            .font: NSFont.monospacedDigitSystemFont(ofSize: 18, weight: .heavy),
+            .foregroundColor: NSColor(calibratedRed: 0.18, green: 0.15, blue: 0.13, alpha: 0.68)
+        ])
     }
 
     private func drawStars(in rect: NSRect) {
@@ -1043,6 +1157,46 @@ private struct AwayoStickyNote {
 }
 
 @MainActor
+private final class StickyNoteComposerView: NSView {
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.shadowColor = NSColor.black.cgColor
+        layer?.shadowOpacity = 0.28
+        layer?.shadowRadius = 20
+        layer?.shadowOffset = NSSize(width: 0, height: -8)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let note = bounds.insetBy(dx: 4, dy: 4)
+        NSColor(calibratedRed: 1.0, green: 0.88, blue: 0.25, alpha: 0.98).setFill()
+        NSBezierPath(roundedRect: note, xRadius: 7, yRadius: 7).fill()
+
+        NSColor.black.withAlphaComponent(0.10).setStroke()
+        let edge = NSBezierPath(roundedRect: note, xRadius: 7, yRadius: 7)
+        edge.lineWidth = 1
+        edge.stroke()
+
+        NSColor.white.withAlphaComponent(0.62).setFill()
+        NSBezierPath(roundedRect: NSRect(x: note.midX - 36, y: note.maxY - 13, width: 72, height: 18), xRadius: 4, yRadius: 4).fill()
+
+        NSColor.black.withAlphaComponent(0.12).setStroke()
+        for index in 0..<3 {
+            let y = note.minY + 45 + CGFloat(index) * 21
+            let line = NSBezierPath()
+            line.move(to: NSPoint(x: note.minX + 18, y: y))
+            line.line(to: NSPoint(x: note.maxX - 18, y: y + CGFloat(index % 2 == 0 ? 1 : -1)))
+            line.lineWidth = 1.2
+            line.stroke()
+        }
+    }
+}
+
+@MainActor
 private final class StickyNoteCardView: NSView {
     private let note: AwayoStickyNote
     private let style: AwayoNoteStyle
@@ -1065,20 +1219,18 @@ private final class StickyNoteCardView: NSView {
     }
 
     private func setup() {
-        layer?.backgroundColor = cardColor.cgColor
-        layer?.cornerRadius = style == .glassCard ? 8 : 6
+        layer?.backgroundColor = NSColor.clear.cgColor
+        layer?.cornerRadius = style == .glassCard ? 10 : 7
         layer?.shadowColor = NSColor.black.cgColor
-        layer?.shadowOpacity = style == .glassCard ? 0.26 : 0.18
-        layer?.shadowRadius = style == .glassCard ? 14 : 8
-        layer?.shadowOffset = NSSize(width: 0, height: -2)
-        layer?.borderWidth = style == .glassCard ? 1 : 0
-        layer?.borderColor = NSColor.white.withAlphaComponent(0.28).cgColor
+        layer?.shadowOpacity = style == .glassCard ? 0.26 : 0.30
+        layer?.shadowRadius = style == .glassCard ? 16 : 12
+        layer?.shadowOffset = NSSize(width: 0, height: -5)
 
         let stack = NSStackView()
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 4
-        stack.edgeInsets = NSEdgeInsets(top: style == .tapedPaper ? 16 : 10, left: 12, bottom: 10, right: 12)
+        stack.edgeInsets = NSEdgeInsets(top: style == .tapedPaper ? 20 : 13, left: 14, bottom: 12, right: 14)
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
 
@@ -1105,17 +1257,32 @@ private final class StickyNoteCardView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        super.draw(dirtyRect)
+        let note = bounds.insetBy(dx: 3, dy: 3)
+
+        if style == .stickyStack {
+            cardColor.withAlphaComponent(0.78).setFill()
+            NSBezierPath(roundedRect: note.offsetBy(dx: 7, dy: -7), xRadius: 7, yRadius: 7).fill()
+            NSColor(calibratedRed: 1.0, green: 0.38, blue: 0.57, alpha: 0.86).setFill()
+            NSBezierPath(roundedRect: note.offsetBy(dx: 13, dy: -13), xRadius: 7, yRadius: 7).fill()
+        }
+
+        cardColor.setFill()
+        NSBezierPath(roundedRect: note, xRadius: style == .glassCard ? 10 : 7, yRadius: style == .glassCard ? 10 : 7).fill()
+        NSColor.black.withAlphaComponent(style == .glassCard ? 0.04 : 0.13).setStroke()
+        let edge = NSBezierPath(roundedRect: note, xRadius: style == .glassCard ? 10 : 7, yRadius: style == .glassCard ? 10 : 7)
+        edge.lineWidth = 1
+        edge.stroke()
 
         switch style {
         case .tapedPaper:
             drawTape()
         case .stickyStack:
-            drawStackShadow()
+            drawRuledLines()
         case .glassCard:
             drawGlassSheen()
         case .markerCard:
             drawMarkerStroke()
+            drawFoldedCorner()
         }
     }
 
@@ -1177,19 +1344,25 @@ private final class StickyNoteCardView: NSView {
 
     private func drawTape() {
         NSColor.white.withAlphaComponent(0.64).setFill()
-        NSBezierPath(roundedRect: NSRect(x: bounds.midX - 34, y: bounds.maxY - 11, width: 68, height: 16), xRadius: 3, yRadius: 3).fill()
+        NSBezierPath(roundedRect: NSRect(x: bounds.midX - 39, y: bounds.maxY - 16, width: 78, height: 19), xRadius: 4, yRadius: 4).fill()
+        drawRuledLines()
     }
 
-    private func drawStackShadow() {
-        NSColor.white.withAlphaComponent(0.24).setStroke()
-        let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 7, dy: 7).offsetBy(dx: 6, dy: -6), xRadius: 6, yRadius: 6)
-        path.lineWidth = 2
-        path.stroke()
+    private func drawRuledLines() {
+        NSColor.black.withAlphaComponent(0.12).setStroke()
+        for index in 0..<3 {
+            let y = bounds.minY + 24 + CGFloat(index) * 18
+            let path = NSBezierPath()
+            path.move(to: NSPoint(x: bounds.minX + 16, y: y))
+            path.line(to: NSPoint(x: bounds.maxX - 16, y: y + CGFloat(index % 2 == 0 ? 1 : -1)))
+            path.lineWidth = 1.2
+            path.stroke()
+        }
     }
 
     private func drawGlassSheen() {
-        NSColor.white.withAlphaComponent(0.18).setFill()
-        NSBezierPath(roundedRect: NSRect(x: 12, y: bounds.maxY - 28, width: bounds.width - 24, height: 2), xRadius: 1, yRadius: 1).fill()
+        NSColor.white.withAlphaComponent(0.22).setFill()
+        NSBezierPath(roundedRect: NSRect(x: 14, y: bounds.maxY - 24, width: bounds.width - 28, height: 2), xRadius: 1, yRadius: 1).fill()
     }
 
     private func drawMarkerStroke() {
@@ -1199,5 +1372,15 @@ private final class StickyNoteCardView: NSView {
         path.line(to: NSPoint(x: bounds.width - 18, y: 22))
         path.lineWidth = 3
         path.stroke()
+    }
+
+    private func drawFoldedCorner() {
+        NSColor.black.withAlphaComponent(0.08).setFill()
+        let fold = NSBezierPath()
+        fold.move(to: NSPoint(x: bounds.maxX - 26, y: bounds.maxY - 3))
+        fold.line(to: NSPoint(x: bounds.maxX - 3, y: bounds.maxY - 26))
+        fold.line(to: NSPoint(x: bounds.maxX - 3, y: bounds.maxY - 3))
+        fold.close()
+        fold.fill()
     }
 }

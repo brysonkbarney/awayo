@@ -26,7 +26,7 @@ final class AwayoSettingsWindowController: NSWindowController {
         self.onPasscodeChange = onPasscodeChange
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 980, height: 720),
+            contentRect: NSRect(x: 0, y: 0, width: 1040, height: 760),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -70,7 +70,7 @@ final class AwayoSettingsWindowController: NSWindowController {
         content.orientation = .vertical
         content.alignment = .leading
         content.spacing = 22
-        content.edgeInsets = NSEdgeInsets(top: 30, left: 34, bottom: 30, right: 34)
+        content.edgeInsets = NSEdgeInsets(top: 34, left: 40, bottom: 34, right: 40)
         content.translatesAutoresizingMaskIntoConstraints = false
 
         let document = NSView()
@@ -185,7 +185,7 @@ final class AwayoSettingsWindowController: NSWindowController {
             row.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -18),
             row.topAnchor.constraint(equalTo: card.topAnchor, constant: 18),
             row.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -18),
-            card.widthAnchor.constraint(equalToConstant: 900)
+            card.widthAnchor.constraint(equalToConstant: 940)
         ])
 
         refreshPasscodeStatus()
@@ -255,8 +255,8 @@ final class AwayoSettingsWindowController: NSWindowController {
         tile.target = self
         tile.action = #selector(selectTile(_:))
         tile.translatesAutoresizingMaskIntoConstraints = false
-        tile.widthAnchor.constraint(equalToConstant: 208).isActive = true
-        tile.heightAnchor.constraint(equalToConstant: 138).isActive = true
+        tile.widthAnchor.constraint(equalToConstant: 222).isActive = true
+        tile.heightAnchor.constraint(equalToConstant: 156).isActive = true
         return tile
     }
 
@@ -274,7 +274,7 @@ final class AwayoSettingsWindowController: NSWindowController {
 
         row.addArrangedSubview(spacer)
         row.addArrangedSubview(done)
-        row.widthAnchor.constraint(equalToConstant: 900).isActive = true
+        row.widthAnchor.constraint(equalToConstant: 940).isActive = true
         return row
     }
 
@@ -302,62 +302,136 @@ final class AwayoSettingsWindowController: NSWindowController {
     }
 
     @objc private func setPasscode() {
-        let alert = NSAlert()
-        alert.messageText = passcodeStore.hasPasscode() ? "Change Awayo Lock Passcode" : "Set Awayo Lock Passcode"
-        alert.informativeText = "This passcode unlocks Awayo Lock. Awayo stores a salted local hash, not the passcode itself."
-        alert.alertStyle = .informational
-
-        let stack = NSStackView()
-        stack.orientation = .vertical
-        stack.spacing = 8
-        stack.translatesAutoresizingMaskIntoConstraints = false
-
-        let passcodeField = NSSecureTextField()
-        passcodeField.placeholderString = "New passcode"
-        passcodeField.frame.size.width = 340
-
-        let confirmationField = NSSecureTextField()
-        confirmationField.placeholderString = "Confirm passcode"
-        confirmationField.frame.size.width = 340
-
-        stack.addArrangedSubview(label("New passcode"))
-        stack.addArrangedSubview(passcodeField)
-        stack.addArrangedSubview(label("Confirm passcode"))
-        stack.addArrangedSubview(confirmationField)
-
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 360, height: 118))
-        container.addSubview(stack)
-        NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            stack.topAnchor.constraint(equalTo: container.topAnchor),
-            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor)
-        ])
-
-        alert.accessoryView = container
-        alert.addButton(withTitle: "Save")
-        alert.addButton(withTitle: "Cancel")
-
-        guard alert.runModal() == .alertFirstButtonReturn else {
+        guard let values = promptForPasscode() else {
             return
         }
 
-        let passcode = passcodeField.stringValue
-        let confirmation = confirmationField.stringValue
-
-        guard !passcode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        guard !values.passcode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             showError("Awayo Lock needs a passcode.")
             return
         }
 
-        guard passcode == confirmation else {
+        guard values.passcode == values.confirmation else {
             showError("The passcodes did not match.")
             return
         }
 
-        passcodeStore.savePasscode(passcode)
+        passcodeStore.savePasscode(values.passcode)
         onPasscodeChange()
         refreshPasscodeStatus()
+    }
+
+    private func promptForPasscode() -> (passcode: String, confirmation: String)? {
+        let panel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 430, height: 278),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        panel.title = passcodeStore.hasPasscode() ? "Change Passcode" : "Set Passcode"
+        panel.isReleasedWhenClosed = false
+        panel.level = .floating
+
+        if let parentFrame = window?.frame {
+            panel.setFrameOrigin(NSPoint(
+                x: parentFrame.midX - panel.frame.width / 2,
+                y: parentFrame.midY - panel.frame.height / 2
+            ))
+        } else {
+            panel.center()
+        }
+
+        let root = NSVisualEffectView()
+        root.material = .popover
+        root.blendingMode = .behindWindow
+        root.state = .active
+        panel.contentView = root
+
+        let stack = NSStackView()
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 12
+        stack.edgeInsets = NSEdgeInsets(top: 24, left: 26, bottom: 22, right: 26)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        root.addSubview(stack)
+
+        let title = NSTextField(labelWithString: "Awayo Lock Passcode")
+        title.font = .systemFont(ofSize: 22, weight: .black)
+        title.textColor = .labelColor
+
+        let subtitle = NSTextField(labelWithString: "Stored as a salted local hash. It unlocks Awayo Lock without using Keychain.")
+        subtitle.font = .systemFont(ofSize: 13, weight: .medium)
+        subtitle.textColor = .secondaryLabelColor
+        subtitle.maximumNumberOfLines = 2
+        subtitle.preferredMaxLayoutWidth = 360
+
+        let passcodeField = NSSecureTextField()
+        passcodeField.placeholderString = "New passcode"
+        passcodeField.font = .systemFont(ofSize: 16, weight: .semibold)
+        passcodeField.bezelStyle = .roundedBezel
+        passcodeField.widthAnchor.constraint(equalToConstant: 360).isActive = true
+
+        let confirmationField = NSSecureTextField()
+        confirmationField.placeholderString = "Confirm passcode"
+        confirmationField.font = .systemFont(ofSize: 16, weight: .semibold)
+        confirmationField.bezelStyle = .roundedBezel
+        confirmationField.widthAnchor.constraint(equalToConstant: 360).isActive = true
+
+        let buttonRow = NSStackView()
+        buttonRow.orientation = .horizontal
+        buttonRow.alignment = .centerY
+        buttonRow.spacing = 10
+        buttonRow.widthAnchor.constraint(equalToConstant: 360).isActive = true
+
+        let cancel = NSButton(title: "Cancel", target: nil, action: nil)
+        cancel.bezelStyle = .rounded
+        cancel.controlSize = .large
+
+        let save = NSButton(title: "Save Passcode", target: nil, action: nil)
+        save.bezelStyle = .rounded
+        save.controlSize = .large
+        save.keyEquivalent = "\r"
+
+        let cancelTarget = ModalButtonTarget {
+            NSApp.stopModal(withCode: .cancel)
+        }
+        let saveTarget = ModalButtonTarget {
+            NSApp.stopModal(withCode: .OK)
+        }
+        cancel.target = cancelTarget
+        cancel.action = #selector(ModalButtonTarget.fire)
+        save.target = saveTarget
+        save.action = #selector(ModalButtonTarget.fire)
+
+        buttonRow.addArrangedSubview(NSView())
+        buttonRow.addArrangedSubview(cancel)
+        buttonRow.addArrangedSubview(save)
+
+        stack.addArrangedSubview(title)
+        stack.addArrangedSubview(subtitle)
+        stack.addArrangedSubview(passcodeField)
+        stack.addArrangedSubview(confirmationField)
+        stack.addArrangedSubview(buttonRow)
+
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: root.topAnchor),
+            stack.bottomAnchor.constraint(equalTo: root.bottomAnchor)
+        ])
+
+        panel.makeKeyAndOrderFront(nil)
+        panel.makeFirstResponder(passcodeField)
+        let response = NSApp.runModal(for: panel)
+        panel.orderOut(nil)
+
+        guard response == .OK else {
+            return nil
+        }
+
+        _ = cancelTarget
+        _ = saveTarget
+        return (passcodeField.stringValue, confirmationField.stringValue)
     }
 
     @objc private func done() {
@@ -459,37 +533,30 @@ final class AwayoPreviewTile: NSButton {
     override func draw(_ dirtyRect: NSRect) {
         let rect = bounds.insetBy(dx: 1, dy: 1)
         let path = NSBezierPath(roundedRect: rect, xRadius: 8, yRadius: 8)
-        NSColor.controlBackgroundColor.withAlphaComponent(0.72).setFill()
+        NSColor(calibratedWhite: 0.12, alpha: 0.92).setFill()
         path.fill()
 
-        let previewRect = NSRect(x: rect.minX + 10, y: rect.minY + 40, width: rect.width - 20, height: rect.height - 50)
+        let previewRect = NSRect(x: rect.minX + 10, y: rect.minY + 36, width: rect.width - 20, height: rect.height - 46)
         drawPreview(in: previewRect)
 
-        let titleRect = NSRect(x: rect.minX + 12, y: rect.minY + 12, width: rect.width - 24, height: 20)
+        let titleRect = NSRect(x: rect.minX + 12, y: rect.minY + 10, width: rect.width - 24, height: 20)
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 13, weight: .bold),
-            .foregroundColor: NSColor.labelColor
+            .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
+            .foregroundColor: NSColor.white.withAlphaComponent(0.92)
         ]
         displayTitle.draw(in: titleRect, withAttributes: attributes)
 
         if isSelected {
             NSColor.controlAccentColor.setStroke()
-            path.lineWidth = 4
+            path.lineWidth = 3
             path.stroke()
 
-            let checkRect = NSRect(x: rect.maxX - 32, y: rect.maxY - 32, width: 20, height: 20)
+            let checkRect = NSRect(x: rect.maxX - 34, y: rect.maxY - 34, width: 22, height: 22)
             NSColor.controlAccentColor.setFill()
             NSBezierPath(ovalIn: checkRect).fill()
-            "OK".draw(
-                in: checkRect.offsetBy(dx: 0, dy: -1),
-                withAttributes: [
-                    .font: NSFont.systemFont(ofSize: 8, weight: .heavy),
-                    .foregroundColor: NSColor.white,
-                    .paragraphStyle: centeredParagraph()
-                ]
-            )
+            drawCheckmark(in: checkRect.insetBy(dx: 5, dy: 6))
         } else {
-            NSColor.separatorColor.withAlphaComponent(0.36).setStroke()
+            NSColor.white.withAlphaComponent(0.08).setStroke()
             path.lineWidth = 1
             path.stroke()
         }
@@ -513,91 +580,113 @@ final class AwayoPreviewTile: NSButton {
             return
         }
 
-        let colors: [NSColor]
         switch style {
         case .duckPond:
-            colors = [.systemTeal, .systemBlue, .systemGreen]
+            drawMiniDuckPond(in: rect)
         case .offlineRunner:
-            colors = [.systemYellow, .systemOrange, .brown]
+            drawMiniRunnerGame(in: rect)
         case .cosmicDesk:
-            colors = [.black, .systemPurple, .systemBlue]
+            drawMiniCosmicDesk(in: rect)
         case .rainyWindow:
-            colors = [.darkGray, .systemBlue, .black]
+            drawMiniRainyWindow(in: rect)
         case .arcadePulse:
-            colors = [.black, .systemPink, .systemTeal]
+            drawMiniArcadePulse(in: rect)
         case .paperNotes:
-            colors = [.systemYellow, .systemMint, .systemGray]
+            drawMiniPaperWall(in: rect)
         case .synthwave:
-            colors = [.black, .systemPink, .systemPurple]
+            drawMiniSynthwave(in: rect)
         case .neonFlow:
-            colors = [.black, .systemTeal, .systemPink]
-        }
-
-        roundedGradient(in: rect, colors: colors)
-
-        switch style {
-        case .duckPond:
-            drawMiniDuck(in: rect)
-        case .offlineRunner:
-            drawMiniRunner(in: rect)
-        case .paperNotes:
-            drawMiniNotes(in: rect)
-        default:
-            drawMiniLines(in: rect)
+            drawMiniNeonFlow(in: rect)
         }
     }
 
     private func drawTimerPreview(in rect: NSRect) {
-        roundedGradient(in: rect, colors: [.windowBackgroundColor, .controlBackgroundColor])
         let style = AwayoTimerStyle(rawValue: rawValue) ?? .heroCountdown
-        let text = style == .terminalTicker ? "$ 14m 32s" : "14m 32s"
-        let font: NSFont = switch style {
+
+        switch style {
         case .heroCountdown:
-            .monospacedDigitSystemFont(ofSize: 28, weight: .heavy)
+            roundedGradient(in: rect, colors: [
+                NSColor(calibratedRed: 0.03, green: 0.04, blue: 0.08, alpha: 1),
+                NSColor(calibratedRed: 0.10, green: 0.13, blue: 0.22, alpha: 1)
+            ])
+            drawTinyStatusDots(in: rect)
+            drawText("14m 32s", in: rect.insetBy(dx: 10, dy: 30), font: .monospacedDigitSystemFont(ofSize: 30, weight: .heavy), color: .white)
         case .paperClock:
-            .systemFont(ofSize: 24, weight: .black)
+            drawPaper(in: rect, color: NSColor(calibratedRed: 1.0, green: 0.91, blue: 0.58, alpha: 1))
+            drawClockFace(in: NSRect(x: rect.minX + 16, y: rect.midY - 26, width: 52, height: 52))
+            drawText("2:58 PM", in: NSRect(x: rect.minX + 72, y: rect.midY - 19, width: rect.width - 86, height: 34), font: .systemFont(ofSize: 23, weight: .black), color: NSColor(calibratedRed: 0.19, green: 0.13, blue: 0.08, alpha: 1))
         case .glassPill:
-            .monospacedDigitSystemFont(ofSize: 22, weight: .bold)
+            roundedGradient(in: rect, colors: [
+                NSColor(calibratedRed: 0.02, green: 0.38, blue: 0.45, alpha: 1),
+                NSColor(calibratedRed: 0.08, green: 0.13, blue: 0.34, alpha: 1)
+            ])
+            drawPill(in: rect.insetBy(dx: 22, dy: 30), color: NSColor.white.withAlphaComponent(0.20))
+            strokePill(in: rect.insetBy(dx: 22, dy: 30), color: NSColor.white.withAlphaComponent(0.28))
+            drawText("14m 32s", in: rect.insetBy(dx: 22, dy: 34), font: .monospacedDigitSystemFont(ofSize: 23, weight: .bold), color: .white)
         case .terminalTicker:
-            .monospacedSystemFont(ofSize: 20, weight: .bold)
+            roundedGradient(in: rect, colors: [
+                NSColor(calibratedRed: 0.01, green: 0.02, blue: 0.02, alpha: 1),
+                NSColor(calibratedRed: 0.02, green: 0.07, blue: 0.05, alpha: 1)
+            ])
+            drawTerminalChrome(in: rect.insetBy(dx: 14, dy: 18))
+            drawText("$ awayo --14m", in: rect.insetBy(dx: 24, dy: 42), font: .monospacedSystemFont(ofSize: 17, weight: .bold), color: NSColor(calibratedRed: 0.47, green: 1.0, blue: 0.63, alpha: 1), alignment: .left)
         }
-        text.draw(in: rect.insetBy(dx: 12, dy: 28), withAttributes: [
-            .font: font,
-            .foregroundColor: NSColor.labelColor,
-            .paragraphStyle: centeredParagraph()
-        ])
     }
 
     private func drawDashboardPreview(in rect: NSRect) {
-        roundedGradient(in: rect, colors: [.systemBlue.withAlphaComponent(0.55), .systemPurple.withAlphaComponent(0.45)])
         let style = AwayoDashboardStyle(rawValue: rawValue) ?? .centerStage
         switch style {
         case .centerStage:
-            drawPill(in: rect.insetBy(dx: 26, dy: 24), color: .white.withAlphaComponent(0.78))
+            roundedGradient(in: rect, colors: [.systemIndigo, .systemPurple])
+            drawPill(in: NSRect(x: rect.midX - 54, y: rect.maxY - 26, width: 108, height: 13), color: .white.withAlphaComponent(0.34))
+            drawPill(in: rect.insetBy(dx: 30, dy: 26), color: .white.withAlphaComponent(0.86))
+            drawText("AWAY", in: rect.insetBy(dx: 34, dy: 42), font: .systemFont(ofSize: 16, weight: .heavy), color: NSColor.black.withAlphaComponent(0.70))
         case .paperDesk:
-            drawPill(in: rect.insetBy(dx: 18, dy: 18), color: .systemYellow.withAlphaComponent(0.82))
+            roundedGradient(in: rect, colors: [
+                NSColor(calibratedRed: 0.42, green: 0.33, blue: 0.22, alpha: 1),
+                NSColor(calibratedRed: 0.19, green: 0.15, blue: 0.12, alpha: 1)
+            ])
+            drawPaper(in: rect.insetBy(dx: 22, dy: 15), color: NSColor(calibratedRed: 1.0, green: 0.93, blue: 0.66, alpha: 1))
+            drawText("back soon", in: rect.insetBy(dx: 36, dy: 40), font: handwrittenFont(size: 18, weight: .bold), color: NSColor(calibratedRed: 0.22, green: 0.15, blue: 0.09, alpha: 1))
         case .minimalBadge:
-            drawPill(in: NSRect(x: rect.midX - 38, y: rect.midY - 16, width: 76, height: 32), color: .white.withAlphaComponent(0.82))
+            roundedGradient(in: rect, colors: [
+                NSColor(calibratedRed: 0.08, green: 0.09, blue: 0.12, alpha: 1),
+                NSColor(calibratedRed: 0.02, green: 0.03, blue: 0.04, alpha: 1)
+            ])
+            drawPill(in: NSRect(x: rect.midX - 46, y: rect.midY - 15, width: 92, height: 30), color: .white.withAlphaComponent(0.88))
+            drawText("ON", in: NSRect(x: rect.midX - 30, y: rect.midY - 9, width: 60, height: 18), font: .systemFont(ofSize: 13, weight: .black), color: .black)
         case .commandCenter:
-            drawPill(in: rect.insetBy(dx: 12, dy: 14), color: .black.withAlphaComponent(0.52))
+            roundedGradient(in: rect, colors: [
+                NSColor(calibratedRed: 0.02, green: 0.09, blue: 0.14, alpha: 1),
+                NSColor(calibratedRed: 0.03, green: 0.02, blue: 0.08, alpha: 1)
+            ])
+            let panel = rect.insetBy(dx: 14, dy: 14)
+            drawPill(in: panel, color: .black.withAlphaComponent(0.48))
+            strokePill(in: panel, color: NSColor(calibratedRed: 0.2, green: 0.82, blue: 0.9, alpha: 0.30))
+            drawHudLines(in: panel)
         }
     }
 
     private func drawNotePreview(in rect: NSRect) {
-        roundedGradient(in: rect, colors: [.systemGray.withAlphaComponent(0.20), .systemTeal.withAlphaComponent(0.22)])
+        roundedGradient(in: rect, colors: [
+            NSColor(calibratedRed: 0.16, green: 0.19, blue: 0.20, alpha: 1),
+            NSColor(calibratedRed: 0.09, green: 0.10, blue: 0.12, alpha: 1)
+        ])
         let style = AwayoNoteStyle(rawValue: rawValue) ?? .tapedPaper
-        let noteRect = rect.insetBy(dx: 32, dy: 18)
+        let noteRect = rect.insetBy(dx: 34, dy: 16)
         switch style {
         case .tapedPaper:
-            drawPill(in: noteRect, color: .systemYellow)
-            drawPill(in: NSRect(x: noteRect.midX - 24, y: noteRect.maxY - 6, width: 48, height: 10), color: .white.withAlphaComponent(0.70))
+            drawStickyNote(in: noteRect, color: NSColor(calibratedRed: 1.0, green: 0.88, blue: 0.24, alpha: 1), tape: true, ruled: true)
         case .stickyStack:
-            drawPill(in: noteRect.offsetBy(dx: 8, dy: -8), color: .systemPink)
-            drawPill(in: noteRect, color: .systemYellow)
+            drawStickyNote(in: noteRect.offsetBy(dx: 10, dy: -9), color: NSColor(calibratedRed: 1.0, green: 0.38, blue: 0.58, alpha: 1), tape: false, ruled: false)
+            drawStickyNote(in: noteRect.offsetBy(dx: 2, dy: -2), color: NSColor(calibratedRed: 0.42, green: 0.93, blue: 0.78, alpha: 1), tape: false, ruled: true)
+            drawStickyNote(in: noteRect.offsetBy(dx: -6, dy: 6), color: NSColor(calibratedRed: 1.0, green: 0.84, blue: 0.18, alpha: 1), tape: false, ruled: true)
         case .glassCard:
-            drawPill(in: noteRect, color: .white.withAlphaComponent(0.36))
+            drawPill(in: noteRect, color: .white.withAlphaComponent(0.22))
+            strokePill(in: noteRect, color: .white.withAlphaComponent(0.35))
+            drawText("from CX", in: noteRect.insetBy(dx: 12, dy: 12), font: .systemFont(ofSize: 11, weight: .bold), color: .white, alignment: .left)
         case .markerCard:
-            drawPill(in: noteRect, color: .white)
+            drawStickyNote(in: noteRect, color: .white, tape: false, ruled: false)
             NSColor.black.withAlphaComponent(0.45).setStroke()
             let line = NSBezierPath()
             line.move(to: NSPoint(x: noteRect.minX + 14, y: noteRect.midY))
@@ -613,35 +702,122 @@ final class AwayoPreviewTile: NSButton {
         NSGradient(colors: colors)?.draw(in: rect, angle: -35)
     }
 
-    private func drawMiniDuck(in rect: NSRect) {
-        NSColor.systemYellow.setFill()
-        NSBezierPath(ovalIn: NSRect(x: rect.midX - 34, y: rect.midY - 10, width: 64, height: 30)).fill()
-        NSBezierPath(ovalIn: NSRect(x: rect.midX + 12, y: rect.midY + 10, width: 26, height: 24)).fill()
-        NSColor.systemOrange.setFill()
-        NSBezierPath(rect: NSRect(x: rect.midX + 36, y: rect.midY + 17, width: 18, height: 7)).fill()
+    private func drawMiniDuckPond(in rect: NSRect) {
+        roundedGradient(in: rect, colors: [
+            NSColor(calibratedRed: 0.64, green: 0.88, blue: 0.94, alpha: 1),
+            NSColor(calibratedRed: 0.08, green: 0.47, blue: 0.56, alpha: 1)
+        ])
+        NSColor(calibratedRed: 1.0, green: 0.80, blue: 0.32, alpha: 0.92).setFill()
+        NSBezierPath(ovalIn: NSRect(x: rect.minX + 16, y: rect.maxY - 42, width: 34, height: 34)).fill()
+        drawRippleLines(in: rect, color: .white.withAlphaComponent(0.24))
+        drawDuck(in: NSPoint(x: rect.midX - 6, y: rect.midY - 2), scale: 0.50)
+        drawDuck(in: NSPoint(x: rect.midX - 54, y: rect.midY - 24), scale: 0.28)
+        drawDuck(in: NSPoint(x: rect.midX - 86, y: rect.midY - 12), scale: 0.24)
     }
 
-    private func drawMiniRunner(in rect: NSRect) {
-        NSColor.black.withAlphaComponent(0.62).setFill()
-        NSRect(x: rect.midX - 16, y: rect.midY - 6, width: 36, height: 28).fill()
-        NSRect(x: rect.midX + 12, y: rect.midY + 18, width: 24, height: 12).fill()
-        NSRect(x: rect.minX + 12, y: rect.minY + 18, width: rect.width - 24, height: 4).fill()
+    private func drawMiniRunnerGame(in rect: NSRect) {
+        roundedGradient(in: rect, colors: [
+            NSColor(calibratedRed: 0.96, green: 0.91, blue: 0.78, alpha: 1),
+            NSColor(calibratedRed: 0.89, green: 0.74, blue: 0.50, alpha: 1)
+        ])
+        let groundY = rect.minY + 25
+        NSColor(calibratedRed: 0.19, green: 0.16, blue: 0.14, alpha: 0.70).setStroke()
+        let ground = NSBezierPath()
+        ground.move(to: NSPoint(x: rect.minX + 8, y: groundY))
+        ground.line(to: NSPoint(x: rect.maxX - 8, y: groundY))
+        ground.lineWidth = 3
+        ground.stroke()
+        drawPixelDino(at: NSPoint(x: rect.minX + 44, y: groundY + 2), scale: 2.1)
+        drawMiniCactus(at: NSPoint(x: rect.maxX - 56, y: groundY), scale: 1.0)
+        drawMiniCloud(in: NSRect(x: rect.midX + 8, y: rect.maxY - 38, width: 48, height: 16))
     }
 
-    private func drawMiniNotes(in rect: NSRect) {
-        [.systemYellow, .systemPink, .systemMint].enumerated().forEach { index, color in
-            drawPill(in: NSRect(x: rect.minX + 24 + CGFloat(index * 34), y: rect.midY - CGFloat(index * 8), width: 62, height: 46), color: color)
+    private func drawMiniCosmicDesk(in rect: NSRect) {
+        roundedGradient(in: rect, colors: [
+            NSColor(calibratedRed: 0.02, green: 0.02, blue: 0.09, alpha: 1),
+            NSColor(calibratedRed: 0.15, green: 0.06, blue: 0.28, alpha: 1),
+            NSColor(calibratedRed: 0.00, green: 0.18, blue: 0.23, alpha: 1)
+        ])
+        drawStars(in: rect, count: 40)
+        let planet = NSRect(x: rect.maxX - 72, y: rect.maxY - 68, width: 48, height: 48)
+        NSColor(calibratedRed: 0.94, green: 0.42, blue: 0.35, alpha: 0.88).setFill()
+        NSBezierPath(ovalIn: planet).fill()
+        NSColor(calibratedRed: 0.57, green: 0.90, blue: 0.93, alpha: 0.42).setStroke()
+        let ring = NSBezierPath(ovalIn: planet.insetBy(dx: -20, dy: 15))
+        ring.lineWidth = 4
+        ring.stroke()
+    }
+
+    private func drawMiniRainyWindow(in rect: NSRect) {
+        roundedGradient(in: rect, colors: [
+            NSColor(calibratedRed: 0.04, green: 0.06, blue: 0.08, alpha: 1),
+            NSColor(calibratedRed: 0.12, green: 0.18, blue: 0.22, alpha: 1)
+        ])
+        let window = rect.insetBy(dx: 28, dy: 16)
+        drawPill(in: window, color: .white.withAlphaComponent(0.08))
+        strokePill(in: window, color: .white.withAlphaComponent(0.18))
+        for index in 0..<18 {
+            let x = rect.minX + CGFloat(index) * rect.width / 18
+            let path = NSBezierPath()
+            path.move(to: NSPoint(x: x, y: rect.maxY - 10))
+            path.line(to: NSPoint(x: x + 9, y: rect.minY + 16))
+            path.lineWidth = 1.2
+            NSColor.white.withAlphaComponent(0.20).setStroke()
+            path.stroke()
         }
     }
 
-    private func drawMiniLines(in rect: NSRect) {
+    private func drawMiniArcadePulse(in rect: NSRect) {
+        roundedGradient(in: rect, colors: [
+            NSColor(calibratedRed: 0.02, green: 0.00, blue: 0.08, alpha: 1),
+            NSColor(calibratedRed: 0.15, green: 0.02, blue: 0.22, alpha: 1)
+        ])
+        drawGridLines(in: rect, spacing: 18, color: NSColor(calibratedRed: 0.13, green: 0.82, blue: 0.90, alpha: 0.16))
+        for index in 0..<7 {
+            let w = CGFloat(20 + (index % 3) * 12)
+            let x = rect.minX + CGFloat(index) * 25 + 12
+            let y = rect.minY + CGFloat(20 + (index % 4) * 13)
+            drawPill(in: NSRect(x: x, y: y, width: w, height: 12), color: tileColor(index, alpha: 0.72))
+        }
+    }
+
+    private func drawMiniPaperWall(in rect: NSRect) {
+        roundedGradient(in: rect, colors: [
+            NSColor(calibratedRed: 0.70, green: 0.64, blue: 0.52, alpha: 1),
+            NSColor(calibratedRed: 0.36, green: 0.42, blue: 0.39, alpha: 1)
+        ])
         for index in 0..<4 {
-            let y = rect.minY + 18 + CGFloat(index) * 16
-            NSColor.white.withAlphaComponent(0.34).setStroke()
+            let color = [NSColor.systemYellow, NSColor.systemPink, NSColor.systemMint, NSColor.white][index]
+            let x = rect.minX + 20 + CGFloat(index % 2) * 72
+            let y = rect.minY + 20 + CGFloat(index / 2) * 38
+            drawStickyNote(in: NSRect(x: x, y: y, width: 56, height: 38), color: color.withAlphaComponent(0.9), tape: index == 0, ruled: index != 1)
+        }
+    }
+
+    private func drawMiniSynthwave(in rect: NSRect) {
+        roundedGradient(in: rect, colors: [
+            NSColor(calibratedRed: 0.04, green: 0.01, blue: 0.11, alpha: 1),
+            NSColor(calibratedRed: 0.23, green: 0.04, blue: 0.31, alpha: 1),
+            NSColor(calibratedRed: 0.00, green: 0.14, blue: 0.20, alpha: 1)
+        ])
+        NSColor(calibratedRed: 1.0, green: 0.35, blue: 0.41, alpha: 0.62).setFill()
+        NSBezierPath(ovalIn: NSRect(x: rect.midX - 34, y: rect.midY - 2, width: 68, height: 68)).fill()
+        drawPerspectiveGrid(in: rect, color: NSColor(calibratedRed: 0.22, green: 0.85, blue: 0.94, alpha: 0.28))
+    }
+
+    private func drawMiniNeonFlow(in rect: NSRect) {
+        roundedGradient(in: rect, colors: [
+            NSColor(calibratedRed: 0.01, green: 0.03, blue: 0.05, alpha: 1),
+            NSColor(calibratedRed: 0.02, green: 0.23, blue: 0.24, alpha: 1),
+            NSColor(calibratedRed: 0.22, green: 0.04, blue: 0.20, alpha: 1)
+        ])
+        for index in 0..<3 {
+            let y = rect.midY + CGFloat(index - 1) * 22
             let path = NSBezierPath()
-            path.move(to: NSPoint(x: rect.minX + 14, y: y))
-            path.line(to: NSPoint(x: rect.maxX - 14, y: y + CGFloat(index % 2 == 0 ? 8 : -8)))
-            path.lineWidth = 5
+            path.move(to: NSPoint(x: rect.minX - 10, y: y))
+            path.curve(to: NSPoint(x: rect.maxX + 10, y: y + CGFloat(index - 1) * 8), controlPoint1: NSPoint(x: rect.minX + 44, y: y + 28), controlPoint2: NSPoint(x: rect.maxX - 52, y: y - 28))
+            path.lineWidth = 10
+            tileColor(index, alpha: 0.42).setStroke()
             path.stroke()
         }
     }
@@ -650,12 +826,266 @@ final class AwayoPreviewTile: NSButton {
         color.setFill()
         NSBezierPath(roundedRect: rect, xRadius: 8, yRadius: 8).fill()
     }
+
+    private func strokePill(in rect: NSRect, color: NSColor) {
+        color.setStroke()
+        let path = NSBezierPath(roundedRect: rect, xRadius: 8, yRadius: 8)
+        path.lineWidth = 1.5
+        path.stroke()
+    }
+
+    private func drawPaper(in rect: NSRect, color: NSColor) {
+        color.setFill()
+        NSBezierPath(roundedRect: rect, xRadius: 4, yRadius: 4).fill()
+        NSColor.black.withAlphaComponent(0.12).setStroke()
+        for index in 1..<4 {
+            let y = rect.minY + CGFloat(index) * rect.height / 4
+            let line = NSBezierPath()
+            line.move(to: NSPoint(x: rect.minX + 12, y: y))
+            line.line(to: NSPoint(x: rect.maxX - 12, y: y + CGFloat(index % 2 == 0 ? 1 : -1)))
+            line.lineWidth = 1
+            line.stroke()
+        }
+    }
+
+    private func drawStickyNote(in rect: NSRect, color: NSColor, tape: Bool, ruled: Bool) {
+        color.setFill()
+        NSBezierPath(roundedRect: rect, xRadius: 5, yRadius: 5).fill()
+        NSColor.black.withAlphaComponent(0.12).setStroke()
+        NSBezierPath(roundedRect: rect, xRadius: 5, yRadius: 5).stroke()
+        if tape {
+            drawPill(in: NSRect(x: rect.midX - 22, y: rect.maxY - 6, width: 44, height: 10), color: .white.withAlphaComponent(0.66))
+        }
+        if ruled {
+            NSColor.black.withAlphaComponent(0.16).setStroke()
+            for index in 0..<3 {
+                let y = rect.minY + 13 + CGFloat(index) * 9
+                let path = NSBezierPath()
+                path.move(to: NSPoint(x: rect.minX + 10, y: y))
+                path.line(to: NSPoint(x: rect.maxX - 10, y: y + CGFloat(index % 2 == 0 ? 1 : -1)))
+                path.lineWidth = 1.2
+                path.stroke()
+            }
+        }
+    }
+
+    private func drawDuck(in point: NSPoint, scale: CGFloat) {
+        NSGraphicsContext.saveGraphicsState()
+        let transform = NSAffineTransform()
+        transform.translateX(by: point.x, yBy: point.y)
+        transform.scale(by: scale)
+        transform.concat()
+        NSColor(calibratedRed: 1.0, green: 0.80, blue: 0.18, alpha: 1).setFill()
+        NSBezierPath(ovalIn: NSRect(x: -42, y: -18, width: 86, height: 38)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 14, y: 8, width: 34, height: 32)).fill()
+        NSColor(calibratedRed: 0.95, green: 0.63, blue: 0.09, alpha: 1).setFill()
+        NSBezierPath(ovalIn: NSRect(x: -14, y: -7, width: 40, height: 21)).fill()
+        NSColor(calibratedRed: 1.0, green: 0.40, blue: 0.10, alpha: 1).setFill()
+        let beak = NSBezierPath()
+        beak.move(to: NSPoint(x: 45, y: 24))
+        beak.line(to: NSPoint(x: 67, y: 18))
+        beak.line(to: NSPoint(x: 45, y: 13))
+        beak.close()
+        beak.fill()
+        NSColor.black.withAlphaComponent(0.78).setFill()
+        NSBezierPath(ovalIn: NSRect(x: 34, y: 25, width: 4, height: 4)).fill()
+        NSGraphicsContext.restoreGraphicsState()
+    }
+
+    private func drawPixelDino(at point: NSPoint, scale: CGFloat) {
+        NSGraphicsContext.saveGraphicsState()
+        let transform = NSAffineTransform()
+        transform.translateX(by: point.x, yBy: point.y)
+        transform.scale(by: scale)
+        transform.concat()
+        NSColor(calibratedRed: 0.14, green: 0.13, blue: 0.12, alpha: 0.9).setFill()
+        let s: CGFloat = 3
+        [
+            NSRect(x: 0, y: 6, width: s * 7, height: s * 7),
+            NSRect(x: 15, y: 21, width: s * 6, height: s * 5),
+            NSRect(x: 30, y: 18, width: s * 2, height: s * 2),
+            NSRect(x: -6, y: 12, width: s * 4, height: s * 2),
+            NSRect(x: 5, y: 0, width: s * 2, height: s * 4),
+            NSRect(x: 18, y: 0, width: s * 2, height: s * 4)
+        ].forEach { $0.fill() }
+        NSColor(calibratedRed: 0.96, green: 0.91, blue: 0.78, alpha: 1).setFill()
+        NSRect(x: 27, y: 31, width: 3, height: 3).fill()
+        NSGraphicsContext.restoreGraphicsState()
+    }
+
+    private func drawMiniCactus(at point: NSPoint, scale: CGFloat) {
+        NSGraphicsContext.saveGraphicsState()
+        let transform = NSAffineTransform()
+        transform.translateX(by: point.x, yBy: point.y)
+        transform.scale(by: scale)
+        transform.concat()
+        NSColor(calibratedRed: 0.10, green: 0.38, blue: 0.25, alpha: 0.82).setFill()
+        NSBezierPath(roundedRect: NSRect(x: -5, y: 0, width: 10, height: 38), xRadius: 5, yRadius: 5).fill()
+        NSBezierPath(roundedRect: NSRect(x: -17, y: 17, width: 8, height: 19), xRadius: 4, yRadius: 4).fill()
+        NSBezierPath(roundedRect: NSRect(x: 9, y: 12, width: 8, height: 20), xRadius: 4, yRadius: 4).fill()
+        NSGraphicsContext.restoreGraphicsState()
+    }
+
+    private func drawMiniCloud(in rect: NSRect) {
+        NSColor.white.withAlphaComponent(0.54).setFill()
+        NSBezierPath(roundedRect: rect, xRadius: 6, yRadius: 6).fill()
+        NSBezierPath(roundedRect: NSRect(x: rect.minX + 12, y: rect.minY + 7, width: 22, height: 14), xRadius: 7, yRadius: 7).fill()
+    }
+
+    private func drawClockFace(in rect: NSRect) {
+        NSColor.white.withAlphaComponent(0.50).setFill()
+        NSBezierPath(ovalIn: rect).fill()
+        NSColor.black.withAlphaComponent(0.28).setStroke()
+        NSBezierPath(ovalIn: rect).stroke()
+        let hand = NSBezierPath()
+        hand.move(to: NSPoint(x: rect.midX, y: rect.midY))
+        hand.line(to: NSPoint(x: rect.midX, y: rect.midY + 14))
+        hand.move(to: NSPoint(x: rect.midX, y: rect.midY))
+        hand.line(to: NSPoint(x: rect.midX + 13, y: rect.midY - 6))
+        hand.lineWidth = 2
+        hand.stroke()
+    }
+
+    private func drawTerminalChrome(in rect: NSRect) {
+        drawPill(in: rect, color: .black.withAlphaComponent(0.62))
+        strokePill(in: rect, color: NSColor.white.withAlphaComponent(0.10))
+        for index in 0..<3 {
+            tileColor(index, alpha: 0.86).setFill()
+            NSBezierPath(ovalIn: NSRect(x: rect.minX + 10 + CGFloat(index) * 13, y: rect.maxY - 18, width: 7, height: 7)).fill()
+        }
+    }
+
+    private func drawTinyStatusDots(in rect: NSRect) {
+        for index in 0..<3 {
+            tileColor(index, alpha: 0.82).setFill()
+            NSBezierPath(ovalIn: NSRect(x: rect.minX + 12 + CGFloat(index) * 10, y: rect.maxY - 18, width: 5, height: 5)).fill()
+        }
+    }
+
+    private func drawHudLines(in rect: NSRect) {
+        for index in 0..<4 {
+            let y = rect.maxY - 22 - CGFloat(index) * 15
+            drawPill(in: NSRect(x: rect.minX + 16, y: y, width: rect.width - CGFloat(56 + index * 14), height: 5), color: NSColor(calibratedRed: 0.34, green: 0.90, blue: 0.88, alpha: 0.46))
+        }
+    }
+
+    private func drawRippleLines(in rect: NSRect, color: NSColor) {
+        color.setStroke()
+        for index in 0..<4 {
+            let y = rect.minY + 22 + CGFloat(index) * 14
+            let path = NSBezierPath()
+            path.move(to: NSPoint(x: rect.minX + 10, y: y))
+            path.curve(to: NSPoint(x: rect.maxX - 10, y: y + 2), controlPoint1: NSPoint(x: rect.midX - 34, y: y + 7), controlPoint2: NSPoint(x: rect.midX + 34, y: y - 7))
+            path.lineWidth = 1.2
+            path.stroke()
+        }
+    }
+
+    private func drawStars(in rect: NSRect, count: Int) {
+        NSColor.white.withAlphaComponent(0.64).setFill()
+        for index in 0..<count {
+            let x = rect.minX + unitNoise(CGFloat(index) * 11.7) * rect.width
+            let y = rect.minY + unitNoise(CGFloat(index) * 31.2) * rect.height
+            NSBezierPath(ovalIn: NSRect(x: x, y: y, width: 1.8, height: 1.8)).fill()
+        }
+    }
+
+    private func drawGridLines(in rect: NSRect, spacing: CGFloat, color: NSColor) {
+        color.setStroke()
+        let path = NSBezierPath()
+        stride(from: rect.minX, through: rect.maxX, by: spacing).forEach { x in
+            path.move(to: NSPoint(x: x, y: rect.minY))
+            path.line(to: NSPoint(x: x, y: rect.maxY))
+        }
+        stride(from: rect.minY, through: rect.maxY, by: spacing).forEach { y in
+            path.move(to: NSPoint(x: rect.minX, y: y))
+            path.line(to: NSPoint(x: rect.maxX, y: y))
+        }
+        path.lineWidth = 1
+        path.stroke()
+    }
+
+    private func drawPerspectiveGrid(in rect: NSRect, color: NSColor) {
+        color.setStroke()
+        let horizon = rect.minY + rect.height * 0.42
+        let path = NSBezierPath()
+        for index in -5...5 {
+            path.move(to: NSPoint(x: rect.midX, y: horizon))
+            path.line(to: NSPoint(x: rect.midX + CGFloat(index) * rect.width * 0.18, y: rect.minY))
+        }
+        for index in 0..<8 {
+            let y = horizon - pow(CGFloat(index) / 8, 1.55) * (horizon - rect.minY)
+            path.move(to: NSPoint(x: rect.minX, y: y))
+            path.line(to: NSPoint(x: rect.maxX, y: y))
+        }
+        path.lineWidth = 1
+        path.stroke()
+    }
+
+    private func drawText(_ text: String, in rect: NSRect, font: NSFont, color: NSColor, alignment: NSTextAlignment = .center) {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = alignment
+        text.draw(in: rect, withAttributes: [
+            .font: font,
+            .foregroundColor: color,
+            .paragraphStyle: paragraph
+        ])
+    }
+
+    private func drawCheckmark(in rect: NSRect) {
+        NSColor.white.setStroke()
+        let path = NSBezierPath()
+        path.move(to: NSPoint(x: rect.minX, y: rect.midY))
+        path.line(to: NSPoint(x: rect.midX - 1, y: rect.minY))
+        path.line(to: NSPoint(x: rect.maxX, y: rect.maxY))
+        path.lineWidth = 2.4
+        path.lineCapStyle = .round
+        path.lineJoinStyle = .round
+        path.stroke()
+    }
+
+    private func handwrittenFont(size: CGFloat, weight: NSFont.Weight) -> NSFont {
+        NSFont(name: "Marker Felt", size: size) ?? .systemFont(ofSize: size, weight: weight)
+    }
+
+    private func tileColor(_ index: Int, alpha: CGFloat) -> NSColor {
+        switch index % 5 {
+        case 0:
+            NSColor(calibratedRed: 1.0, green: 0.82, blue: 0.22, alpha: alpha)
+        case 1:
+            NSColor(calibratedRed: 0.18, green: 0.84, blue: 0.78, alpha: alpha)
+        case 2:
+            NSColor(calibratedRed: 1.0, green: 0.32, blue: 0.55, alpha: alpha)
+        case 3:
+            NSColor(calibratedRed: 0.58, green: 0.50, blue: 1.0, alpha: alpha)
+        default:
+            NSColor.white.withAlphaComponent(alpha)
+        }
+    }
+
+    private func unitNoise(_ value: CGFloat) -> CGFloat {
+        let raw = sin(value) * 43758.5453
+        return raw - floor(raw)
+    }
 }
 
 private func centeredParagraph() -> NSParagraphStyle {
     let paragraph = NSMutableParagraphStyle()
     paragraph.alignment = .center
     return paragraph
+}
+
+@MainActor
+private final class ModalButtonTarget: NSObject {
+    private let action: () -> Void
+
+    init(action: @escaping () -> Void) {
+        self.action = action
+    }
+
+    @objc func fire() {
+        action()
+    }
 }
 
 private extension Array {
