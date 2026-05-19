@@ -23,7 +23,7 @@ struct AwayoSession {
     let message: String
 }
 
-struct PrivacyCoverDetails {
+struct AwayoLockDetails {
     let message: String
     let passcode: String
 }

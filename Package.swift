@@ -19,7 +19,8 @@ let package = Package(
             name: "Awayo",
             linkerSettings: [
                 .linkedFramework("AppKit"),
-                .linkedFramework("IOKit")
+                .linkedFramework("IOKit"),
+                .linkedFramework("Security")
             ]
         ),
     ]

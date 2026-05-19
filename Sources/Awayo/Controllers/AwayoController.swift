@@ -6,6 +6,7 @@ final class AwayoController: NSObject {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let powerManager = PowerAssertionManager()
     private let privacyOverlay = PrivacyOverlayController()
+    private let passcodeStore = KeychainPasscodeStore()
 
     private var session: AwayoSession?
     private var tickTimer: Timer?
@@ -45,6 +46,8 @@ final class AwayoController: NSObject {
         }
 
         let privacyMenu = NSMenu()
+        privacyMenu.addItem(menuItem(title: passcodeMenuTitle(), action: #selector(setAwayoLockPasscode)))
+        privacyMenu.addItem(NSMenuItem.separator())
         addDurationItems(
             to: privacyMenu,
             action: #selector(startPrivacyCoverFromMenu(_:)),
@@ -109,6 +112,10 @@ final class AwayoController: NSObject {
         return item
     }
 
+    private func passcodeMenuTitle() -> String {
+        passcodeStore.hasPasscode() ? "Change Awayo Lock Passcode..." : "Set Awayo Lock Passcode..."
+    }
+
     @objc private func startKeepAwakeFromMenu(_ sender: NSMenuItem) {
         startSession(mode: .awake, duration: duration(from: sender), message: "Keeping your Mac awake")
     }
@@ -127,7 +134,7 @@ final class AwayoController: NSObject {
 
     @objc private func startPrivacyCoverFromMenu(_ sender: NSMenuItem) {
         let duration = duration(from: sender)
-        let details = promptForPrivacyCoverDetails(duration: duration)
+        let details = promptForAwayoLockDetails(duration: duration)
 
         guard let details else {
             return
@@ -190,6 +197,11 @@ final class AwayoController: NSObject {
 
     @objc private func stopAwayo() {
         stopSession()
+    }
+
+    @objc private func setAwayoLockPasscode() {
+        _ = promptToSetAwayoLockPasscode(required: false)
+        refreshMenu()
     }
 
     @objc private func showAbout() {
@@ -273,10 +285,14 @@ final class AwayoController: NSObject {
         return seconds
     }
 
-    private func promptForPrivacyCoverDetails(duration: TimeInterval?) -> PrivacyCoverDetails? {
+    private func promptForAwayoLockDetails(duration: TimeInterval?) -> AwayoLockDetails? {
+        guard let passcode = savedOrNewAwayoLockPasscode() else {
+            return nil
+        }
+
         let alert = NSAlert()
         alert.messageText = "Start Awayo Lock"
-        alert.informativeText = "Choose the note people will see and the passcode that dismisses the cover."
+        alert.informativeText = "Choose the note people will see. Unlocking uses your saved Awayo Lock passcode."
         alert.alertStyle = .informational
 
         let stack = NSStackView()
@@ -288,16 +304,10 @@ final class AwayoController: NSObject {
         messageField.placeholderString = "Message"
         messageField.frame.size.width = 340
 
-        let passcodeField = NSSecureTextField()
-        passcodeField.placeholderString = "Passcode to dismiss"
-        passcodeField.frame.size.width = 340
-
         stack.addArrangedSubview(label("Away message"))
         stack.addArrangedSubview(messageField)
-        stack.addArrangedSubview(label("Passcode"))
-        stack.addArrangedSubview(passcodeField)
 
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 360, height: 118))
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 360, height: 54))
         container.addSubview(stack)
         NSLayoutConstraint.activate([
             stack.leadingAnchor.constraint(equalTo: container.leadingAnchor),
@@ -314,17 +324,87 @@ final class AwayoController: NSObject {
             return nil
         }
 
-        let passcode = passcodeField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !passcode.isEmpty else {
-            showError("Awayo Lock needs a passcode for this version.")
-            return nil
-        }
-
         let message = messageField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        return PrivacyCoverDetails(
+        return AwayoLockDetails(
             message: message.isEmpty ? "Away for a minute. Work is still running." : message,
             passcode: passcode
         )
+    }
+
+    private func savedOrNewAwayoLockPasscode() -> String? {
+        do {
+            if let passcode = try passcodeStore.loadPasscode(), !passcode.isEmpty {
+                return passcode
+            }
+        } catch {
+            showError(error.localizedDescription)
+            return nil
+        }
+
+        return promptToSetAwayoLockPasscode(required: true)
+    }
+
+    private func promptToSetAwayoLockPasscode(required: Bool) -> String? {
+        let alert = NSAlert()
+        alert.messageText = required ? "Set Awayo Lock Passcode" : "Change Awayo Lock Passcode"
+        alert.informativeText = "This passcode unlocks Awayo Lock. It is saved in your macOS Keychain."
+        alert.alertStyle = .informational
+
+        let stack = NSStackView()
+        stack.orientation = .vertical
+        stack.spacing = 8
+        stack.translatesAutoresizingMaskIntoConstraints = false
+
+        let passcodeField = NSSecureTextField()
+        passcodeField.placeholderString = "New passcode"
+        passcodeField.frame.size.width = 340
+
+        let confirmationField = NSSecureTextField()
+        confirmationField.placeholderString = "Confirm passcode"
+        confirmationField.frame.size.width = 340
+
+        stack.addArrangedSubview(label("New passcode"))
+        stack.addArrangedSubview(passcodeField)
+        stack.addArrangedSubview(label("Confirm passcode"))
+        stack.addArrangedSubview(confirmationField)
+
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 360, height: 118))
+        container.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: container.topAnchor),
+            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor)
+        ])
+
+        alert.accessoryView = container
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+
+        guard alert.runModal() == .alertFirstButtonReturn else {
+            return nil
+        }
+
+        let passcode = passcodeField.stringValue
+        let confirmation = confirmationField.stringValue
+
+        guard !passcode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            showError("Awayo Lock needs a passcode.")
+            return nil
+        }
+
+        guard passcode == confirmation else {
+            showError("The passcodes did not match.")
+            return nil
+        }
+
+        do {
+            try passcodeStore.savePasscode(passcode)
+            return passcode
+        } catch {
+            showError(error.localizedDescription)
+            return nil
+        }
     }
 
     private func label(_ text: String) -> NSTextField {

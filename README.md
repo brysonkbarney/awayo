@@ -7,13 +7,15 @@ It is built for the familiar developer problem: a CLI agent, build, download, te
 ## What It Does
 
 - Keep the Mac awake for 15 minutes, 30 minutes, 1 hour, 2 hours, or until stopped.
-- Start Awayo Lock with an away note, countdown, and passcode.
+- Start Awayo Lock with a saved passcode, away note, and countdown.
 - Start a native macOS Lock Screen while keeping background work awake.
 - Run entirely from the menu bar.
 
 **Awayo Lock** is intentionally a casual lock screen, not a replacement for the macOS Lock Screen. For real security, use **macOS Lock + Keep Awake**.
 
 Awayo Lock creates an overlay on every connected display, keeps those overlays above normal and full-screen windows, and reasserts itself when macOS Spaces change. It also blocks common keyboard shortcuts and swipe/scroll gestures while the lock is active, while still allowing passcode entry.
+
+The Awayo Lock passcode is set before starting a lock session and stored in the macOS Keychain.
 
 ## Run Locally
 
@@ -22,6 +24,8 @@ swift run Awayo
 ```
 
 The app appears in the macOS menu bar. Quit it from the Awayo menu.
+
+Use **Awayo Lock -> Set Awayo Lock Passcode...** before your first Awayo Lock session.
 
 ## Build the Mac App
 
@@ -36,6 +40,12 @@ For a full launch smoke test:
 
 ```sh
 Scripts/smoke_test.sh
+```
+
+To verify the keep-awake mechanism at the macOS power assertion level:
+
+```sh
+Scripts/verify_keep_awake.sh
 ```
 
 ## Roadmap
