@@ -114,7 +114,7 @@ final class PrivacyOverlayView: NSView {
             content.addArrangedSubview(hint)
         }
 
-        let footer = NSTextField(labelWithString: "Privacy cover only. Use Lock + Keep Awake for real security.")
+        let footer = NSTextField(labelWithString: "Awayo Lock. Use macOS Lock + Keep Awake for real security.")
         footer.font = .systemFont(ofSize: 13, weight: .medium)
         footer.textColor = NSColor.white.withAlphaComponent(0.42)
         footer.alignment = .center

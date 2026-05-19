@@ -7,11 +7,11 @@ It is built for the familiar developer problem: a CLI agent, build, download, te
 ## What It Does
 
 - Keep the Mac awake for 15 minutes, 30 minutes, 1 hour, 2 hours, or until stopped.
-- Start a privacy cover with an away note, countdown, and passcode.
+- Start Awayo Lock with an away note, countdown, and passcode.
 - Start a native macOS Lock Screen while keeping background work awake.
 - Run entirely from the menu bar.
 
-Privacy Cover is intentionally a casual privacy layer, not a replacement for the macOS Lock Screen. For real security, use **Lock + Keep Awake**.
+**Awayo Lock** is intentionally a casual lock screen, not a replacement for the macOS Lock Screen. For real security, use **macOS Lock + Keep Awake**.
 
 ## Run Locally
 

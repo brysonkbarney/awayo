@@ -14,7 +14,7 @@ Scripts/package_app.sh
 
 ## Product Principles
 
-- Be honest about security. Privacy Cover is casual privacy. macOS Lock Screen is security.
+- Be honest about security. Awayo Lock is a casual lock. macOS Lock Screen is security.
 - Prefer native macOS behavior over clever workarounds.
 - Keep the app fast, quiet, and easy to quit.
 - Make the fun parts optional.

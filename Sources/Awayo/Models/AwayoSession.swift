@@ -11,7 +11,7 @@ struct AwayoSession {
             case .awake:
                 "Awake"
             case .privacy:
-                "Privacy Cover"
+                "Awayo Lock"
             case .locked:
                 "Locked"
             }

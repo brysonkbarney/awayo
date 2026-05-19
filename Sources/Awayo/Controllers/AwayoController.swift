@@ -50,7 +50,7 @@ final class AwayoController: NSObject {
             action: #selector(startPrivacyCoverFromMenu(_:)),
             suffix: "..."
         )
-        menu.setSubmenu(privacyMenu, for: menu.addItem(withTitle: "Privacy Cover", action: nil, keyEquivalent: ""))
+        menu.setSubmenu(privacyMenu, for: menu.addItem(withTitle: "Awayo Lock", action: nil, keyEquivalent: ""))
 
         let awakeMenu = NSMenu()
         addDurationItems(
@@ -66,7 +66,7 @@ final class AwayoController: NSObject {
             action: #selector(startLockScreenFromMenu(_:)),
             suffix: ""
         )
-        menu.setSubmenu(lockMenu, for: menu.addItem(withTitle: "Lock + Keep Awake", action: nil, keyEquivalent: ""))
+        menu.setSubmenu(lockMenu, for: menu.addItem(withTitle: "macOS Lock + Keep Awake", action: nil, keyEquivalent: ""))
 
         menu.addItem(NSMenuItem.separator())
         menu.addItem(menuItem(title: "Custom Duration...", action: #selector(startCustomDuration)))
@@ -161,9 +161,9 @@ final class AwayoController: NSObject {
         durationField.frame = NSRect(x: 0, y: 0, width: 240, height: 24)
 
         alert.accessoryView = durationField
-        alert.addButton(withTitle: "Privacy Cover")
+        alert.addButton(withTitle: "Awayo Lock")
         alert.addButton(withTitle: "Keep Awake")
-        alert.addButton(withTitle: "Lock + Keep Awake")
+        alert.addButton(withTitle: "macOS Lock")
         alert.addButton(withTitle: "Cancel")
 
         let response = alert.runModal()
@@ -198,7 +198,7 @@ final class AwayoController: NSObject {
         alert.informativeText = """
         Step away. Stay running.
 
-        Privacy Cover is a casual screen cover, not a security boundary. Use Lock + Keep Awake when the Mac should be protected by the native macOS Lock Screen.
+        Awayo Lock is a casual screen lock, not a macOS security boundary. Use macOS Lock + Keep Awake when the Mac should be protected by the native macOS Lock Screen.
         """
         alert.alertStyle = .informational
         alert.addButton(withTitle: "OK")
@@ -275,7 +275,7 @@ final class AwayoController: NSObject {
 
     private func promptForPrivacyCoverDetails(duration: TimeInterval?) -> PrivacyCoverDetails? {
         let alert = NSAlert()
-        alert.messageText = "Start Privacy Cover"
+        alert.messageText = "Start Awayo Lock"
         alert.informativeText = "Choose the note people will see and the passcode that dismisses the cover."
         alert.alertStyle = .informational
 
@@ -316,7 +316,7 @@ final class AwayoController: NSObject {
 
         let passcode = passcodeField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !passcode.isEmpty else {
-            showError("Privacy Cover needs a passcode for this version.")
+            showError("Awayo Lock needs a passcode for this version.")
             return nil
         }
 
