@@ -2,6 +2,13 @@ import AppKit
 
 @MainActor
 final class AwayoSettingsWindowController: NSWindowController {
+    private enum Layout {
+        static let previewTileWidth: CGFloat = 222
+        static let previewTileHeight: CGFloat = 156
+        static let previewTileSpacing: CGFloat = 14
+        static let previewGridWidth = previewTileWidth * 4 + previewTileSpacing * 3
+    }
+
     private let settingsStore: AwayoSettingsStore
     private let passcodeStore: PasscodeStore
     private let onPasscodeChange: () -> Void
@@ -215,15 +222,23 @@ final class AwayoSettingsWindowController: NSWindowController {
     }
 
     private func tileGrid(for category: AwayoPreviewCategory) -> NSView {
-        let grid = NSGridView()
+        let grid = NSStackView()
+        grid.orientation = .vertical
+        grid.alignment = .leading
+        grid.spacing = Layout.previewTileSpacing
         grid.translatesAutoresizingMaskIntoConstraints = false
-        grid.rowSpacing = 14
-        grid.columnSpacing = 14
+        grid.widthAnchor.constraint(equalToConstant: Layout.previewGridWidth).isActive = true
+        grid.setContentHuggingPriority(.required, for: .horizontal)
+        grid.setContentCompressionResistancePriority(.required, for: .horizontal)
 
         let tiles = makeTiles(for: category)
         tiles.chunked(into: 4).forEach { rowTiles in
-            let padded = rowTiles + Array(repeating: NSView(), count: max(0, 4 - rowTiles.count))
-            grid.addRow(with: padded)
+            let row = NSStackView(views: rowTiles)
+            row.orientation = .horizontal
+            row.alignment = .centerY
+            row.spacing = Layout.previewTileSpacing
+            row.setContentHuggingPriority(.required, for: .horizontal)
+            grid.addArrangedSubview(row)
         }
 
         switch category {
@@ -258,8 +273,8 @@ final class AwayoSettingsWindowController: NSWindowController {
         tile.target = self
         tile.action = #selector(selectTile(_:))
         tile.translatesAutoresizingMaskIntoConstraints = false
-        tile.widthAnchor.constraint(equalToConstant: 222).isActive = true
-        tile.heightAnchor.constraint(equalToConstant: 156).isActive = true
+        tile.widthAnchor.constraint(equalToConstant: Layout.previewTileWidth).isActive = true
+        tile.heightAnchor.constraint(equalToConstant: Layout.previewTileHeight).isActive = true
         return tile
     }
 
