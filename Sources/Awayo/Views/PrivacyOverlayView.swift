@@ -12,6 +12,8 @@ final class PrivacyOverlayView: NSView {
     private let backAtLabel = NSTextField(labelWithString: "")
     private let activityLabel = NSTextField(labelWithString: "")
     private let unlockButton = NSButton(title: "Unlock", target: nil, action: nil)
+    private let safetyExitButton = NSButton(title: "Safety Exit", target: nil, action: nil)
+    private let unlockErrorLabel = NSTextField(labelWithString: "")
     private let notePanel = NSStackView()
     private let notesStack = NSStackView()
     private let noteNameField = NSTextField(string: "")
@@ -112,11 +114,15 @@ final class PrivacyOverlayView: NSView {
     }
 
     func focusUnlockFieldIfAppropriate() {
-        guard showsUnlockField, !noteComposerActive else {
+        guard showsUnlockField, !noteComposerActive, !isTypingInUnlockField else {
             return
         }
 
         window?.makeFirstResponder(unlockField)
+    }
+
+    var isEnteringText: Bool {
+        isTypingInUnlockField || isTypingInNoteComposer
     }
 
     func jumpRunnerIfNeeded() {
@@ -255,7 +261,7 @@ final class PrivacyOverlayView: NSView {
         let unlockPanel = NSStackView()
         unlockPanel.orientation = .vertical
         unlockPanel.alignment = .centerX
-        unlockPanel.spacing = 10
+        unlockPanel.spacing = 9
         unlockPanel.edgeInsets = NSEdgeInsets(top: 16, left: 18, bottom: 16, right: 18)
         unlockPanel.wantsLayer = true
         unlockPanel.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.28).cgColor
@@ -286,12 +292,32 @@ final class PrivacyOverlayView: NSView {
         unlockButton.controlSize = .large
         unlockButton.font = .systemFont(ofSize: 15, weight: .bold)
 
+        safetyExitButton.target = self
+        safetyExitButton.action = #selector(safetyExit)
+        safetyExitButton.bezelStyle = .rounded
+        safetyExitButton.controlSize = .regular
+        safetyExitButton.font = .systemFont(ofSize: 12, weight: .semibold)
+
+        unlockErrorLabel.font = .systemFont(ofSize: 12, weight: .semibold)
+        unlockErrorLabel.textColor = NSColor(calibratedRed: 1.0, green: 0.55, blue: 0.45, alpha: 1)
+        unlockErrorLabel.alignment = .center
+        unlockErrorLabel.isHidden = true
+
         unlockRow.addArrangedSubview(unlockField)
         unlockRow.addArrangedSubview(unlockButton)
         unlockField.widthAnchor.constraint(equalToConstant: 280).isActive = true
 
+        let safetyText = NSTextField(labelWithString: "If passcode entry glitches, use Safety Exit. This is a casual lock.")
+        safetyText.font = .systemFont(ofSize: 11, weight: .medium)
+        safetyText.textColor = NSColor.white.withAlphaComponent(0.46)
+        safetyText.alignment = .center
+        safetyText.maximumNumberOfLines = 2
+
         unlockPanel.addArrangedSubview(title)
         unlockPanel.addArrangedSubview(unlockRow)
+        unlockPanel.addArrangedSubview(unlockErrorLabel)
+        unlockPanel.addArrangedSubview(safetyText)
+        unlockPanel.addArrangedSubview(safetyExitButton)
         return unlockPanel
     }
 
@@ -660,10 +686,37 @@ final class PrivacyOverlayView: NSView {
         guard verifyPasscode(unlockField.stringValue) else {
             NSSound.beep()
             unlockField.stringValue = ""
+            unlockErrorLabel.stringValue = "That passcode did not match."
+            unlockErrorLabel.isHidden = false
             return
         }
 
         onUnlock()
+    }
+
+    @objc private func safetyExit() {
+        onUnlock()
+    }
+
+    private var isTypingInUnlockField: Bool {
+        guard let firstResponder = window?.firstResponder else {
+            return false
+        }
+
+        return firstResponder === unlockField.currentEditor()
+            || firstResponder === unlockField
+            || unlockField.currentEditor() === firstResponder
+    }
+
+    private var isTypingInNoteComposer: Bool {
+        guard let firstResponder = window?.firstResponder else {
+            return false
+        }
+
+        return firstResponder === noteNameField.currentEditor()
+            || firstResponder === noteMessageField.currentEditor()
+            || firstResponder === noteNameField
+            || firstResponder === noteMessageField
     }
 
     private func drawNeonFlow(in rect: NSRect) {

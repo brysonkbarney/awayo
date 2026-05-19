@@ -250,6 +250,10 @@ final class PrivacyOverlayController: NSObject {
             case .scrollWheel, .swipe, .magnify, .rotate:
                 return nil
             case .keyDown:
+                if self?.overlayViews.contains(where: { $0.isEnteringText }) == true {
+                    return event
+                }
+
                 if event.charactersIgnoringModifiers == " " {
                     self?.overlayViews.forEach { $0.jumpRunnerIfNeeded() }
                     return nil

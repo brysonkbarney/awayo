@@ -14,6 +14,7 @@ final class AwayoSettingsWindowController: NSWindowController {
     private let headerSubtitleLabel = NSTextField(labelWithString: "")
     private var passcodeStatusLabel = NSTextField(labelWithString: "")
     private let passcodeButton = NSButton(title: "Set Passcode", target: nil, action: nil)
+    private var modalButtonTargets: [ModalButtonTarget] = []
     private var onboarding = false
 
     init(
@@ -398,6 +399,7 @@ final class AwayoSettingsWindowController: NSWindowController {
         let saveTarget = ModalButtonTarget {
             NSApp.stopModal(withCode: .OK)
         }
+        modalButtonTargets = [cancelTarget, saveTarget]
         cancel.target = cancelTarget
         cancel.action = #selector(ModalButtonTarget.fire)
         save.target = saveTarget
@@ -424,13 +426,12 @@ final class AwayoSettingsWindowController: NSWindowController {
         panel.makeFirstResponder(passcodeField)
         let response = NSApp.runModal(for: panel)
         panel.orderOut(nil)
+        modalButtonTargets.removeAll()
 
         guard response == .OK else {
             return nil
         }
 
-        _ = cancelTarget
-        _ = saveTarget
         return (passcodeField.stringValue, confirmationField.stringValue)
     }
 
