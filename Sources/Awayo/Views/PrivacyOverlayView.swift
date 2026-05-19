@@ -380,13 +380,23 @@ final class PrivacyOverlayView: NSView {
         noteComposerHost.addSubview(noteComposer)
 
         noteNameField.placeholderString = "Your name"
+        (noteNameField.cell as? NSTextFieldCell)?.placeholderAttributedString = NSAttributedString(
+            string: "Your name",
+            attributes: [.foregroundColor: NSColor.black.withAlphaComponent(0.38)]
+        )
         noteNameField.font = .systemFont(ofSize: 14, weight: .semibold)
+        noteNameField.textColor = NSColor.black.withAlphaComponent(0.70)
         noteNameField.isBordered = false
         noteNameField.backgroundColor = .clear
         noteNameField.widthAnchor.constraint(equalToConstant: 256).isActive = true
 
         noteMessageField.placeholderString = "Leave a note"
+        (noteMessageField.cell as? NSTextFieldCell)?.placeholderAttributedString = NSAttributedString(
+            string: "Leave a note",
+            attributes: [.foregroundColor: NSColor.black.withAlphaComponent(0.40)]
+        )
         noteMessageField.font = handwrittenFont(size: 18, weight: .semibold)
+        noteMessageField.textColor = NSColor.black.withAlphaComponent(0.84)
         noteMessageField.isBordered = false
         noteMessageField.backgroundColor = .clear
         noteMessageField.widthAnchor.constraint(equalToConstant: 256).isActive = true
@@ -452,6 +462,8 @@ final class PrivacyOverlayView: NSView {
         positionComposerHost()
         noteNameField.stringValue = ""
         noteMessageField.stringValue = ""
+        noteNameField.textColor = NSColor.black.withAlphaComponent(0.70)
+        noteMessageField.textColor = NSColor.black.withAlphaComponent(0.84)
         window?.makeFirstResponder(noteNameField)
     }
 
@@ -485,7 +497,7 @@ final class PrivacyOverlayView: NSView {
     }
 
     private func positionComposerHost() {
-        let size = NSSize(width: 292, height: 150)
+        let size = NSSize(width: 292, height: 218)
         let point = pendingNotePoint ?? NSPoint(x: bounds.midX, y: bounds.midY)
         let x = min(max(point.x - size.width / 2, 22), max(22, bounds.width - size.width - 22))
         let y = min(max(point.y - size.height / 2, 22), max(22, bounds.height - size.height - 22))
@@ -505,7 +517,7 @@ final class PrivacyOverlayView: NSView {
 
     private func positionFloatingNotes() {
         zip(stickyNotes, floatingNoteViews).forEach { note, view in
-            let size = NSSize(width: 286, height: 104)
+            let size = NSSize(width: 238, height: 206)
             let minX: CGFloat = 22
             let maxX = max(minX, bounds.width - size.width - 22)
             let minY: CGFloat = 22
@@ -1238,8 +1250,12 @@ private final class StickyNoteComposerView: NSView {
         NSBezierPath(roundedRect: NSRect(x: note.midX - 36, y: note.maxY - 13, width: 72, height: 18), xRadius: 4, yRadius: 4).fill()
 
         NSColor.black.withAlphaComponent(0.12).setStroke()
-        for index in 0..<3 {
+        for index in 0..<6 {
             let y = note.minY + 45 + CGFloat(index) * 21
+            guard y < note.maxY - 24 else {
+                continue
+            }
+
             let line = NSBezierPath()
             line.move(to: NSPoint(x: note.minX + 18, y: y))
             line.line(to: NSPoint(x: note.maxX - 18, y: y + CGFloat(index % 2 == 0 ? 1 : -1)))
@@ -1257,12 +1273,12 @@ private final class StickyNoteCardView: NSView {
     init(note: AwayoStickyNote, style: AwayoNoteStyle, usesConstraints: Bool = true) {
         self.note = note
         self.style = style
-        super.init(frame: NSRect(x: 0, y: 0, width: 280, height: 92))
+        super.init(frame: NSRect(x: 0, y: 0, width: 238, height: 206))
         wantsLayer = true
         translatesAutoresizingMaskIntoConstraints = !usesConstraints
         if usesConstraints {
             widthAnchor.constraint(equalToConstant: 282).isActive = true
-            heightAnchor.constraint(greaterThanOrEqualToConstant: 86).isActive = true
+            heightAnchor.constraint(greaterThanOrEqualToConstant: 168).isActive = true
         }
         setup()
     }
@@ -1294,9 +1310,9 @@ private final class StickyNoteCardView: NSView {
         let message = NSTextField(labelWithString: note.message)
         message.font = messageFont
         message.textColor = primaryTextColor
-        message.maximumNumberOfLines = 3
+        message.maximumNumberOfLines = 7
         message.lineBreakMode = .byWordWrapping
-        message.preferredMaxLayoutWidth = 250
+        message.preferredMaxLayoutWidth = 210
 
         stack.addArrangedSubview(author)
         stack.addArrangedSubview(message)
@@ -1403,8 +1419,12 @@ private final class StickyNoteCardView: NSView {
 
     private func drawRuledLines() {
         NSColor.black.withAlphaComponent(0.12).setStroke()
-        for index in 0..<3 {
+        for index in 0..<7 {
             let y = bounds.minY + 24 + CGFloat(index) * 18
+            guard y < bounds.maxY - 26 else {
+                continue
+            }
+
             let path = NSBezierPath()
             path.move(to: NSPoint(x: bounds.minX + 16, y: y))
             path.line(to: NSPoint(x: bounds.maxX - 16, y: y + CGFloat(index % 2 == 0 ? 1 : -1)))
