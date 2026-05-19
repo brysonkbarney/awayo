@@ -12,6 +12,7 @@ final class AwayoSettingsWindowController: NSWindowController {
     private var noteTiles: [AwayoPreviewTile] = []
     private let headerTitleLabel = NSTextField(labelWithString: "")
     private let headerSubtitleLabel = NSTextField(labelWithString: "")
+    private let backgroundColorWell = NSColorWell()
     private var passcodeStatusLabel = NSTextField(labelWithString: "")
     private let passcodeButton = NSButton(title: "Set Passcode", target: nil, action: nil)
     private var modalButtonTargets: [ModalButtonTarget] = []
@@ -95,8 +96,9 @@ final class AwayoSettingsWindowController: NSWindowController {
 
         content.addArrangedSubview(headerView())
         content.addArrangedSubview(passcodeSection())
-        content.addArrangedSubview(sectionTitle("Backgrounds", "Pick the scene Awayo Lock uses every time it starts."))
+        content.addArrangedSubview(sectionTitle("Backgrounds", "Pick the scene or quiet pattern Awayo Lock uses every time it starts."))
         content.addArrangedSubview(tileGrid(for: .background))
+        content.addArrangedSubview(backgroundColorRow())
         content.addArrangedSubview(sectionTitle("Timer", "Choose the way the countdown feels."))
         content.addArrangedSubview(tileGrid(for: .timer))
         content.addArrangedSubview(sectionTitle("Dashboard", "Choose how much presence the center display has."))
@@ -279,11 +281,62 @@ final class AwayoSettingsWindowController: NSWindowController {
         return row
     }
 
+    private func backgroundColorRow() -> NSView {
+        let card = cardView()
+        card.translatesAutoresizingMaskIntoConstraints = false
+
+        let row = NSStackView()
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 14
+        row.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(row)
+
+        let copy = NSStackView()
+        copy.orientation = .vertical
+        copy.alignment = .leading
+        copy.spacing = 3
+
+        let title = NSTextField(labelWithString: "Custom Color Background")
+        title.font = .systemFont(ofSize: 14, weight: .bold)
+        title.textColor = .labelColor
+
+        let subtitle = NSTextField(labelWithString: "Use the color well for the Custom Color tile.")
+        subtitle.font = .systemFont(ofSize: 12, weight: .medium)
+        subtitle.textColor = .secondaryLabelColor
+
+        copy.addArrangedSubview(title)
+        copy.addArrangedSubview(subtitle)
+
+        backgroundColorWell.target = self
+        backgroundColorWell.action = #selector(solidBackgroundColorChanged(_:))
+        backgroundColorWell.controlSize = .large
+
+        row.addArrangedSubview(backgroundColorWell)
+        row.addArrangedSubview(copy)
+        row.addArrangedSubview(NSView())
+
+        NSLayoutConstraint.activate([
+            backgroundColorWell.widthAnchor.constraint(equalToConstant: 44),
+            backgroundColorWell.heightAnchor.constraint(equalToConstant: 32),
+            row.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
+            row.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
+            row.topAnchor.constraint(equalTo: card.topAnchor, constant: 12),
+            row.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -12),
+            card.widthAnchor.constraint(equalToConstant: 940)
+        ])
+
+        return card
+    }
+
     @objc private func selectTile(_ sender: AwayoPreviewTile) {
         switch sender.category {
         case .background:
             if let value = AwayoLockStyle(rawValue: sender.rawValue) {
                 settingsStore.saveBackgroundStyle(value)
+                if value == .solidColor {
+                    backgroundColorWell.activate(true)
+                }
             }
         case .timer:
             if let value = AwayoTimerStyle(rawValue: sender.rawValue) {
@@ -299,6 +352,12 @@ final class AwayoSettingsWindowController: NSWindowController {
             }
         }
 
+        refreshSelections()
+    }
+
+    @objc private func solidBackgroundColorChanged(_ sender: NSColorWell) {
+        settingsStore.saveSolidBackgroundColor(AwayoColor(nsColor: sender.color))
+        settingsStore.saveBackgroundStyle(.solidColor)
         refreshSelections()
     }
 
@@ -447,7 +506,9 @@ final class AwayoSettingsWindowController: NSWindowController {
 
     private func refreshSelections() {
         let appearance = settingsStore.appearance()
+        backgroundColorWell.color = appearance.solidBackgroundColor.nsColor
         backgroundTiles.forEach { $0.isSelected = $0.rawValue == appearance.backgroundStyle.rawValue }
+        backgroundTiles.forEach { $0.customSolidColor = appearance.solidBackgroundColor.nsColor }
         timerTiles.forEach { $0.isSelected = $0.rawValue == appearance.timerStyle.rawValue }
         dashboardTiles.forEach { $0.isSelected = $0.rawValue == appearance.dashboardStyle.rawValue }
         noteTiles.forEach { $0.isSelected = $0.rawValue == appearance.noteStyle.rawValue }
@@ -508,11 +569,20 @@ final class AwayoPreviewTile: NSButton {
     let category: AwayoPreviewCategory
     let rawValue: String
     private let displayTitle: String
+    var customSolidColor = AwayoColor.defaultSolidBackground.nsColor {
+        didSet {
+            needsDisplay = true
+        }
+    }
 
     var isSelected = false {
         didSet {
             needsDisplay = true
         }
+    }
+
+    override var isFlipped: Bool {
+        false
     }
 
     init(category: AwayoPreviewCategory, rawValue: String, title: String) {
@@ -598,6 +668,14 @@ final class AwayoPreviewTile: NSButton {
             drawMiniSynthwave(in: rect)
         case .neonFlow:
             drawMiniNeonFlow(in: rect)
+        case .solidColor:
+            drawMiniSolidColor(in: rect)
+        case .softWash:
+            drawMiniSoftWash(in: rect)
+        case .stripes:
+            drawMiniStripes(in: rect)
+        case .polkaDots:
+            drawMiniPolkaDots(in: rect)
         }
     }
 
@@ -823,9 +901,81 @@ final class AwayoPreviewTile: NSButton {
         }
     }
 
+    private func drawMiniSolidColor(in rect: NSRect) {
+        customSolidColor.setFill()
+        NSBezierPath(roundedRect: rect, xRadius: 8, yRadius: 8).fill()
+
+        NSColor.white.withAlphaComponent(0.18).setStroke()
+        let shine = NSBezierPath()
+        shine.move(to: NSPoint(x: rect.minX + 18, y: rect.maxY - 24))
+        shine.line(to: NSPoint(x: rect.maxX - 18, y: rect.maxY - 24))
+        shine.lineWidth = 3
+        shine.stroke()
+    }
+
+    private func drawMiniSoftWash(in rect: NSRect) {
+        roundedGradient(in: rect, colors: [
+            customSolidColor.blended(withFraction: 0.38, of: .white) ?? customSolidColor,
+            customSolidColor,
+            customSolidColor.blended(withFraction: 0.34, of: .black) ?? customSolidColor
+        ])
+        drawSoftWashRings(in: rect)
+    }
+
+    private func drawMiniStripes(in rect: NSRect) {
+        customSolidColor.blended(withFraction: 0.10, of: .black)?.setFill()
+        NSBezierPath(roundedRect: rect, xRadius: 8, yRadius: 8).fill()
+        NSGraphicsContext.saveGraphicsState()
+        NSBezierPath(roundedRect: rect, xRadius: 8, yRadius: 8).addClip()
+        for index in -4..<12 {
+            let stripe = NSBezierPath()
+            let x = rect.minX + CGFloat(index) * 34
+            stripe.move(to: NSPoint(x: x, y: rect.minY))
+            stripe.line(to: NSPoint(x: x + 60, y: rect.maxY))
+            stripe.lineWidth = 18
+            let stripeColor = (index.isMultiple(of: 2)
+                ? customSolidColor.blended(withFraction: 0.25, of: .white)
+                : customSolidColor.blended(withFraction: 0.18, of: .black)
+            ) ?? customSolidColor
+            stripeColor.withAlphaComponent(0.95).setStroke()
+            stripe.stroke()
+        }
+        NSGraphicsContext.restoreGraphicsState()
+    }
+
+    private func drawMiniPolkaDots(in rect: NSRect) {
+        customSolidColor.setFill()
+        NSBezierPath(roundedRect: rect, xRadius: 8, yRadius: 8).fill()
+        let dotColor = customSolidColor.blended(withFraction: 0.62, of: .white) ?? .white
+        dotColor.withAlphaComponent(0.72).setFill()
+        for row in 0..<4 {
+            for column in 0..<7 {
+                let x = rect.minX + 18 + CGFloat(column) * 29 + CGFloat(row % 2) * 14
+                let y = rect.minY + 18 + CGFloat(row) * 22
+                NSBezierPath(ovalIn: NSRect(x: x, y: y, width: 8, height: 8)).fill()
+            }
+        }
+    }
+
     private func drawPill(in rect: NSRect, color: NSColor) {
         color.setFill()
         NSBezierPath(roundedRect: rect, xRadius: 8, yRadius: 8).fill()
+    }
+
+    private func drawSoftWashRings(in rect: NSRect) {
+        for index in 0..<4 {
+            let inset = CGFloat(index) * 18
+            let ring = NSRect(
+                x: rect.minX + inset - 18,
+                y: rect.minY + inset - 10,
+                width: rect.width - inset * 2 + 36,
+                height: rect.height - inset * 2 + 20
+            )
+            NSColor.white.withAlphaComponent(0.08 + CGFloat(index) * 0.035).setStroke()
+            let path = NSBezierPath(ovalIn: ring)
+            path.lineWidth = 2
+            path.stroke()
+        }
     }
 
     private func strokePill(in rect: NSRect, color: NSColor) {

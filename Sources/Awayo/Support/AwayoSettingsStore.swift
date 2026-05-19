@@ -3,6 +3,9 @@ import Foundation
 final class AwayoSettingsStore {
     private enum Key {
         static let backgroundStyle = "awayoBackgroundStyle"
+        static let solidBackgroundColorRed = "awayoSolidBackgroundColorRed"
+        static let solidBackgroundColorGreen = "awayoSolidBackgroundColorGreen"
+        static let solidBackgroundColorBlue = "awayoSolidBackgroundColorBlue"
         static let timerStyle = "awayoTimerStyle"
         static let dashboardStyle = "awayoDashboardStyle"
         static let noteStyle = "awayoNoteStyle"
@@ -26,6 +29,7 @@ final class AwayoSettingsStore {
     func appearance() -> AwayoAppearance {
         AwayoAppearance(
             backgroundStyle: value(for: Key.backgroundStyle, fallback: AwayoAppearance.fallback.backgroundStyle),
+            solidBackgroundColor: solidBackgroundColor(),
             timerStyle: value(for: Key.timerStyle, fallback: AwayoAppearance.fallback.timerStyle),
             dashboardStyle: value(for: Key.dashboardStyle, fallback: AwayoAppearance.fallback.dashboardStyle),
             noteStyle: value(for: Key.noteStyle, fallback: AwayoAppearance.fallback.noteStyle)
@@ -34,6 +38,12 @@ final class AwayoSettingsStore {
 
     func saveBackgroundStyle(_ style: AwayoLockStyle) {
         defaults.set(style.rawValue, forKey: Key.backgroundStyle)
+    }
+
+    func saveSolidBackgroundColor(_ color: AwayoColor) {
+        defaults.set(color.red, forKey: Key.solidBackgroundColorRed)
+        defaults.set(color.green, forKey: Key.solidBackgroundColorGreen)
+        defaults.set(color.blue, forKey: Key.solidBackgroundColorBlue)
     }
 
     func saveTimerStyle(_ style: AwayoTimerStyle) {
@@ -57,5 +67,17 @@ final class AwayoSettingsStore {
         }
 
         return value
+    }
+
+    private func solidBackgroundColor() -> AwayoColor {
+        guard defaults.object(forKey: Key.solidBackgroundColorRed) != nil else {
+            return AwayoAppearance.fallback.solidBackgroundColor
+        }
+
+        return AwayoColor(
+            red: defaults.double(forKey: Key.solidBackgroundColorRed),
+            green: defaults.double(forKey: Key.solidBackgroundColorGreen),
+            blue: defaults.double(forKey: Key.solidBackgroundColorBlue)
+        )
     }
 }

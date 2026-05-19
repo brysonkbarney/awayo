@@ -165,6 +165,14 @@ final class PrivacyOverlayView: NSView {
             drawPaperNotes(in: bounds)
         case .synthwave:
             drawSynthwave(in: bounds)
+        case .solidColor:
+            drawSolidColor(in: bounds)
+        case .softWash:
+            drawSoftWash(in: bounds)
+        case .stripes:
+            drawStripes(in: bounds)
+        case .polkaDots:
+            drawPolkaDots(in: bounds)
         }
     }
 
@@ -652,6 +660,14 @@ final class PrivacyOverlayView: NSView {
             "The grid is glowing and the scripts are still cruising."
         case .neonFlow:
             "Agents, scripts, builds, and local services are still moving."
+        case .solidColor:
+            "Quiet color, no distractions. Your work is still running."
+        case .softWash:
+            "A soft wash while agents and scripts keep moving."
+        case .stripes:
+            "Clean stripes, steady tasks."
+        case .polkaDots:
+            "Dots are holding the room while your work continues."
         }
     }
 
@@ -824,10 +840,92 @@ final class PrivacyOverlayView: NSView {
         drawMountains(in: rect)
     }
 
+    private func drawSolidColor(in rect: NSRect) {
+        awayoAppearance.solidBackgroundColor.nsColor.setFill()
+        rect.fill()
+        drawSubtleVignette(in: rect)
+    }
+
+    private func drawSoftWash(in rect: NSRect) {
+        let base = awayoAppearance.solidBackgroundColor.nsColor
+        NSGradient(colors: [
+            base.blended(withFraction: 0.40, of: .white) ?? base,
+            base,
+            base.blended(withFraction: 0.32, of: .black) ?? base
+        ])?.draw(in: rect, angle: -35)
+
+        for index in 0..<7 {
+            let diameter = rect.height * (0.42 + CGFloat(index) * 0.08)
+            let x = rect.width * unitNoise(CGFloat(index) * 17.3) - diameter * 0.35
+            let y = rect.height * unitNoise(CGFloat(index) * 29.1) - diameter * 0.35
+            NSColor.white.withAlphaComponent(0.035 + CGFloat(index % 3) * 0.018).setStroke()
+            let path = NSBezierPath(ovalIn: NSRect(x: x, y: y, width: diameter, height: diameter))
+            path.lineWidth = 3
+            path.stroke()
+        }
+
+        drawSubtleVignette(in: rect)
+    }
+
+    private func drawStripes(in rect: NSRect) {
+        let base = awayoAppearance.solidBackgroundColor.nsColor
+        (base.blended(withFraction: 0.15, of: .black) ?? base).setFill()
+        rect.fill()
+
+        for index in -8..<Int(rect.width / 54) + 10 {
+            let path = NSBezierPath()
+            let x = CGFloat(index) * 72 - (animationPhase * 18).truncatingRemainder(dividingBy: 72)
+            path.move(to: NSPoint(x: x, y: rect.minY - 140))
+            path.line(to: NSPoint(x: x + 280, y: rect.maxY + 140))
+            path.lineWidth = 38
+            let color = (index.isMultiple(of: 2)
+                ? base.blended(withFraction: 0.25, of: .white)
+                : base.blended(withFraction: 0.18, of: .black)
+            ) ?? base
+            color.withAlphaComponent(0.92).setStroke()
+            path.stroke()
+        }
+
+        drawSubtleVignette(in: rect)
+    }
+
+    private func drawPolkaDots(in rect: NSRect) {
+        let base = awayoAppearance.solidBackgroundColor.nsColor
+        base.setFill()
+        rect.fill()
+
+        let dotColor = (base.blended(withFraction: 0.62, of: .white) ?? .white).withAlphaComponent(0.58)
+        dotColor.setFill()
+        let spacing: CGFloat = rect.width < 900 ? 52 : 76
+        let radius: CGFloat = rect.width < 900 ? 6 : 9
+        let drift = sin(animationPhase) * 3
+
+        var row = 0
+        for y in stride(from: rect.minY - spacing, through: rect.maxY + spacing, by: spacing) {
+            let xOffset = row.isMultiple(of: 2) ? 0 : spacing / 2
+            for x in stride(from: rect.minX - spacing, through: rect.maxX + spacing, by: spacing) {
+                NSBezierPath(ovalIn: NSRect(
+                    x: x + xOffset + drift,
+                    y: y - drift,
+                    width: radius * 2,
+                    height: radius * 2
+                )).fill()
+            }
+            row += 1
+        }
+
+        drawSubtleVignette(in: rect)
+    }
+
     private func drawGradient(in rect: NSRect, colors: [NSColor], angle: CGFloat) {
         NSGradient(colors: colors)?.draw(in: rect, angle: angle)
         NSColor(calibratedWhite: 0, alpha: 0.12).setFill()
         rect.fill()
+    }
+
+    private func drawSubtleVignette(in rect: NSRect) {
+        NSColor.black.withAlphaComponent(0.12).setFill()
+        rect.fill(using: .sourceAtop)
     }
 
     private func drawMotionBands(in rect: NSRect) {

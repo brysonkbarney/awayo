@@ -2,16 +2,26 @@ import Foundation
 
 struct AwayoAppearance {
     var backgroundStyle: AwayoLockStyle
+    var solidBackgroundColor: AwayoColor
     var timerStyle: AwayoTimerStyle
     var dashboardStyle: AwayoDashboardStyle
     var noteStyle: AwayoNoteStyle
 
     static let fallback = AwayoAppearance(
         backgroundStyle: .duckPond,
+        solidBackgroundColor: .defaultSolidBackground,
         timerStyle: .heroCountdown,
         dashboardStyle: .centerStage,
         noteStyle: .tapedPaper
     )
+}
+
+struct AwayoColor: Equatable {
+    var red: Double
+    var green: Double
+    var blue: Double
+
+    static let defaultSolidBackground = AwayoColor(red: 0.10, green: 0.34, blue: 0.72)
 }
 
 enum AwayoTimerStyle: String, CaseIterable {

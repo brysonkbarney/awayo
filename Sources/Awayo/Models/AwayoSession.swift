@@ -36,6 +36,10 @@ enum AwayoLockStyle: String, CaseIterable {
     case arcadePulse
     case paperNotes
     case synthwave
+    case solidColor
+    case softWash
+    case stripes
+    case polkaDots
 
     var title: String {
         switch self {
@@ -55,6 +59,14 @@ enum AwayoLockStyle: String, CaseIterable {
             "Paper Notes"
         case .synthwave:
             "Synthwave"
+        case .solidColor:
+            "Custom Color"
+        case .softWash:
+            "Soft Wash"
+        case .stripes:
+            "Stripes"
+        case .polkaDots:
+            "Polka Dots"
         }
     }
 
@@ -76,6 +88,14 @@ enum AwayoLockStyle: String, CaseIterable {
             "LEAVE A NOTE IF YOU STOPPED BY"
         case .synthwave:
             "BUILDING IN THE DISTANCE"
+        case .solidColor:
+            "STAYING SIMPLE"
+        case .softWash:
+            "SOFT FOCUS"
+        case .stripes:
+            "STRIPED AND STEADY"
+        case .polkaDots:
+            "DOTS ON DUTY"
         }
     }
 
