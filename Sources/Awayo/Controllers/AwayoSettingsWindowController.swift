@@ -524,18 +524,18 @@ final class AwayoSettingsWindowController: NSWindowController {
 
     private func refreshPasscodeStatus() {
         passcodeStatusLabel.stringValue = passcodeStore.hasPasscode()
-            ? "Passcode is set. Awayo Lock is ready."
+            ? "Awayo Lock is ready. Agents can keep running behind it."
             : "Set this once before starting Awayo Lock."
         passcodeButton.title = passcodeStore.hasPasscode() ? "Change Passcode" : "Set Passcode"
     }
 
     private func refreshHeader() {
         if onboarding {
-            headerTitleLabel.stringValue = "Set up your Awayo screen."
-            headerSubtitleLabel.stringValue = "Pick the look once, set the passcode, and Awayo Lock will use these choices every time from the menu."
+            headerTitleLabel.stringValue = "don't let your agents die."
+            headerSubtitleLabel.stringValue = "Set a passcode, pick the look, and keep your Mac awake behind Awayo Lock."
         } else {
-            headerTitleLabel.stringValue = "Make your away screen feel alive."
-            headerSubtitleLabel.stringValue = "Set your unlock passcode once, pick your style, then start Awayo Lock from the menu without choosing a background every time."
+            headerTitleLabel.stringValue = "don't let your agents die."
+            headerSubtitleLabel.stringValue = "Keep your Mac awake behind Awayo Lock. Pick the passcode, styles, notes, and timer once."
         }
     }
 

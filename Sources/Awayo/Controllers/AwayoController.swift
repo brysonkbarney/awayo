@@ -46,7 +46,7 @@ final class AwayoController: NSObject {
             button.title = "Awayo"
         }
 
-        button.toolTip = "Awayo"
+        button.toolTip = "don't let your agents die."
     }
 
     private func refreshMenu() {
@@ -143,11 +143,11 @@ final class AwayoController: NSObject {
     }
 
     @objc private func startKeepAwakeFromMenu(_ sender: NSMenuItem) {
-        startSession(mode: .awake, duration: duration(from: sender), message: "Keeping your Mac awake")
+        startSession(mode: .awake, duration: duration(from: sender), message: "Keeping your agents alive")
     }
 
     @objc private func startLockScreenFromMenu(_ sender: NSMenuItem) {
-        guard startSession(mode: .locked, duration: duration(from: sender), message: "Keeping your Mac awake") else {
+        guard startSession(mode: .locked, duration: duration(from: sender), message: "Keeping your agents alive") else {
             return
         }
 
@@ -244,9 +244,11 @@ final class AwayoController: NSObject {
         let alert = NSAlert()
         alert.messageText = "Awayo"
         alert.informativeText = """
-        Step away. Stay running.
+        don't let your agents die.
 
-        Awayo Lock is a casual screen lock, not a macOS security boundary. Use macOS Lock + Keep Awake when the Mac should be protected by the native macOS Lock Screen.
+        Keep your Mac awake behind Awayo Lock. It covers your displays with a passcode screen while agents, scripts, and long-running tasks keep going.
+
+        Awayo Lock covers your screen; it is not the macOS Lock Screen. For full security, use macOS Lock + Keep Awake.
         """
         alert.alertStyle = .informational
         alert.addButton(withTitle: "OK")
@@ -328,7 +330,7 @@ final class AwayoController: NSObject {
 
         let alert = NSAlert()
         alert.messageText = "Start Awayo Lock"
-        alert.informativeText = "Choose the note people will see. Backgrounds, timer, dashboard, sticky notes, and passcode live in Awayo Settings."
+        alert.informativeText = "Keep your Mac awake behind Awayo Lock. Choose the note people will see while your agents keep running."
         alert.alertStyle = .informational
 
         let stack = NSStackView()
@@ -363,7 +365,7 @@ final class AwayoController: NSObject {
         let message = messageField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
 
         return AwayoLockDetails(
-            message: message.isEmpty ? "Away for a minute. Work is still running." : message
+            message: message.isEmpty ? "brb, agents are running" : message
         )
     }
 
@@ -385,11 +387,11 @@ final class AwayoController: NSObject {
 
     private func defaultPrivacyMessage(duration: TimeInterval?) -> String {
         guard let duration else {
-            return "Away for a minute. Work is still running."
+            return "brb, agents are running"
         }
 
         let backAt = Date().addingTimeInterval(duration).formatted(date: .omitted, time: .shortened)
-        return "Away for a minute. Back around \(backAt)."
+        return "brb, agents are running. Back around \(backAt)."
     }
 
     private func remainingLabel(for session: AwayoSession) -> String {

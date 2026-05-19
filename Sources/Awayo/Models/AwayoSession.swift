@@ -73,27 +73,27 @@ enum AwayoLockStyle: String, CaseIterable {
     var statusText: String {
         switch self {
         case .neonFlow:
-            "WORK IS STILL RUNNING"
+            "AGENTS STILL ALIVE"
         case .duckPond:
-            "FLOATING BACK SOON"
+            "BRB, STILL RUNNING"
         case .offlineRunner:
             "RUNNING WHILE YOU'RE AWAY"
         case .cosmicDesk:
             "ORBITING YOUR TASKS"
         case .rainyWindow:
-            "RAIN CHECK IN PROGRESS"
+            "COVERED AND RUNNING"
         case .arcadePulse:
             "INSERT PASSCODE TO RESUME"
         case .paperNotes:
-            "LEAVE A NOTE IF YOU STOPPED BY"
+            "LEAVE A NOTE FOR THE HUMAN"
         case .synthwave:
             "BUILDING IN THE DISTANCE"
         case .solidColor:
-            "STAYING SIMPLE"
+            "AWAKE BEHIND AWAYO LOCK"
         case .softWash:
-            "SOFT FOCUS"
+            "SOFT LOCK, STILL RUNNING"
         case .stripes:
-            "STRIPED AND STEADY"
+            "STRIPED AND AWAKE"
         case .polkaDots:
             "DOTS ON DUTY"
         }

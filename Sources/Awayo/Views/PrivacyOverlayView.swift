@@ -315,7 +315,7 @@ final class PrivacyOverlayView: NSView {
         unlockRow.addArrangedSubview(unlockButton)
         unlockField.widthAnchor.constraint(equalToConstant: 280).isActive = true
 
-        let safetyText = NSTextField(labelWithString: "If passcode entry glitches, use Safety Exit. This is a casual lock.")
+        let safetyText = NSTextField(labelWithString: "Awayo Lock covers the screen. Safety Exit is here if passcode entry glitches.")
         safetyText.font = .systemFont(ofSize: 11, weight: .medium)
         safetyText.textColor = NSColor.white.withAlphaComponent(0.46)
         safetyText.alignment = .center
@@ -346,7 +346,7 @@ final class PrivacyOverlayView: NSView {
         title.font = .systemFont(ofSize: 15, weight: .heavy)
         title.textColor = .white
 
-        let subtitle = NSTextField(labelWithString: "Visitors can click anywhere to leave a note.")
+        let subtitle = NSTextField(labelWithString: "Click anywhere to leave a note for the human.")
         subtitle.font = .systemFont(ofSize: 12, weight: .medium)
         subtitle.textColor = NSColor.white.withAlphaComponent(0.56)
         subtitle.maximumNumberOfLines = 2
@@ -645,17 +645,17 @@ final class PrivacyOverlayView: NSView {
     private func activityText(for style: AwayoLockStyle) -> String {
         switch style {
         case .duckPond:
-            "The pond is calm. Your jobs are still paddling along."
+            "The pond is calm. Your agents are still paddling along."
         case .offlineRunner:
             "Your terminal keeps running while the tiny runner patrols the desert."
         case .cosmicDesk:
-            "Background tasks are orbiting quietly."
+            "Agents, scripts, and background tasks are orbiting quietly."
         case .rainyWindow:
-            "Work is still running behind the rain."
+            "Your agents are still running behind the rain."
         case .arcadePulse:
             "Builds, agents, and scripts are earning points in the background."
         case .paperNotes:
-            "Friends can leave sticky notes while your work keeps going."
+            "Friends can leave sticky notes while your agents keep going."
         case .synthwave:
             "The grid is glowing and the scripts are still cruising."
         case .neonFlow:
