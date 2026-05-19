@@ -12,7 +12,7 @@ final class AwayoSettingsWindowController: NSWindowController {
     private var noteTiles: [AwayoPreviewTile] = []
     private let headerTitleLabel = NSTextField(labelWithString: "")
     private let headerSubtitleLabel = NSTextField(labelWithString: "")
-    private let backgroundColorWell = NSColorWell()
+    private let backgroundColorSwatch = AwayoColorSwatchView()
     private var passcodeStatusLabel = NSTextField(labelWithString: "")
     private let passcodeButton = NSButton(title: "Set Passcode", target: nil, action: nil)
     private var modalButtonTargets: [ModalButtonTarget] = []
@@ -98,7 +98,7 @@ final class AwayoSettingsWindowController: NSWindowController {
         content.addArrangedSubview(passcodeSection())
         content.addArrangedSubview(sectionTitle("Backgrounds", "Pick the scene or quiet pattern Awayo Lock uses every time it starts."))
         content.addArrangedSubview(tileGrid(for: .background))
-        content.addArrangedSubview(backgroundColorRow())
+        content.addArrangedSubview(customColorControl())
         content.addArrangedSubview(sectionTitle("Timer", "Choose the way the countdown feels."))
         content.addArrangedSubview(tileGrid(for: .timer))
         content.addArrangedSubview(sectionTitle("Dashboard", "Choose how much presence the center display has."))
@@ -281,52 +281,28 @@ final class AwayoSettingsWindowController: NSWindowController {
         return row
     }
 
-    private func backgroundColorRow() -> NSView {
-        let card = cardView()
-        card.translatesAutoresizingMaskIntoConstraints = false
-
+    private func customColorControl() -> NSView {
         let row = NSStackView()
         row.orientation = .horizontal
         row.alignment = .centerY
-        row.spacing = 14
-        row.translatesAutoresizingMaskIntoConstraints = false
-        card.addSubview(row)
+        row.spacing = 10
+        row.edgeInsets = NSEdgeInsets(top: 2, left: 0, bottom: 0, right: 0)
+        row.setContentHuggingPriority(.required, for: .horizontal)
 
-        let copy = NSStackView()
-        copy.orientation = .vertical
-        copy.alignment = .leading
-        copy.spacing = 3
+        let label = NSTextField(labelWithString: "Custom color")
+        label.font = .systemFont(ofSize: 13, weight: .bold)
+        label.textColor = .secondaryLabelColor
 
-        let title = NSTextField(labelWithString: "Custom Color Background")
-        title.font = .systemFont(ofSize: 14, weight: .bold)
-        title.textColor = .labelColor
+        let choose = NSButton(title: "Choose Color...", target: self, action: #selector(chooseSolidBackgroundColor))
+        choose.bezelStyle = .rounded
+        choose.controlSize = .regular
+        choose.font = .systemFont(ofSize: 13, weight: .semibold)
 
-        let subtitle = NSTextField(labelWithString: "Use the color well for the Custom Color tile.")
-        subtitle.font = .systemFont(ofSize: 12, weight: .medium)
-        subtitle.textColor = .secondaryLabelColor
+        row.addArrangedSubview(label)
+        row.addArrangedSubview(backgroundColorSwatch)
+        row.addArrangedSubview(choose)
 
-        copy.addArrangedSubview(title)
-        copy.addArrangedSubview(subtitle)
-
-        backgroundColorWell.target = self
-        backgroundColorWell.action = #selector(solidBackgroundColorChanged(_:))
-        backgroundColorWell.controlSize = .large
-
-        row.addArrangedSubview(backgroundColorWell)
-        row.addArrangedSubview(copy)
-        row.addArrangedSubview(NSView())
-
-        NSLayoutConstraint.activate([
-            backgroundColorWell.widthAnchor.constraint(equalToConstant: 44),
-            backgroundColorWell.heightAnchor.constraint(equalToConstant: 32),
-            row.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
-            row.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
-            row.topAnchor.constraint(equalTo: card.topAnchor, constant: 12),
-            row.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -12),
-            card.widthAnchor.constraint(equalToConstant: 940)
-        ])
-
-        return card
+        return row
     }
 
     @objc private func selectTile(_ sender: AwayoPreviewTile) {
@@ -335,7 +311,7 @@ final class AwayoSettingsWindowController: NSWindowController {
             if let value = AwayoLockStyle(rawValue: sender.rawValue) {
                 settingsStore.saveBackgroundStyle(value)
                 if value == .solidColor {
-                    backgroundColorWell.activate(true)
+                    showSolidColorPanel()
                 }
             }
         case .timer:
@@ -355,10 +331,27 @@ final class AwayoSettingsWindowController: NSWindowController {
         refreshSelections()
     }
 
-    @objc private func solidBackgroundColorChanged(_ sender: NSColorWell) {
-        settingsStore.saveSolidBackgroundColor(AwayoColor(nsColor: sender.color))
+    @objc private func chooseSolidBackgroundColor() {
         settingsStore.saveBackgroundStyle(.solidColor)
         refreshSelections()
+        showSolidColorPanel()
+    }
+
+    @objc private func solidBackgroundColorChanged(_ sender: Any?) {
+        let color = (sender as? NSColorPanel)?.color ?? NSColorPanel.shared.color
+        settingsStore.saveSolidBackgroundColor(AwayoColor(nsColor: color))
+        settingsStore.saveBackgroundStyle(.solidColor)
+        refreshSelections()
+    }
+
+    private func showSolidColorPanel() {
+        let panel = NSColorPanel.shared
+        panel.showsAlpha = false
+        panel.color = settingsStore.appearance().solidBackgroundColor.nsColor
+        panel.setTarget(self)
+        panel.setAction(#selector(solidBackgroundColorChanged(_:)))
+        panel.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     @objc private func setPasscode() {
@@ -506,7 +499,7 @@ final class AwayoSettingsWindowController: NSWindowController {
 
     private func refreshSelections() {
         let appearance = settingsStore.appearance()
-        backgroundColorWell.color = appearance.solidBackgroundColor.nsColor
+        backgroundColorSwatch.color = appearance.solidBackgroundColor.nsColor
         backgroundTiles.forEach { $0.isSelected = $0.rawValue == appearance.backgroundStyle.rawValue }
         backgroundTiles.forEach { $0.customSolidColor = appearance.solidBackgroundColor.nsColor }
         timerTiles.forEach { $0.isSelected = $0.rawValue == appearance.timerStyle.rawValue }
@@ -554,6 +547,37 @@ final class AwayoSettingsWindowController: NSWindowController {
         alert.informativeText = message
         alert.alertStyle = .warning
         alert.runModal()
+    }
+}
+
+@MainActor
+private final class AwayoColorSwatchView: NSView {
+    var color = AwayoColor.defaultSolidBackground.nsColor {
+        didSet {
+            needsDisplay = true
+        }
+    }
+
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: 34, height: 24)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let rect = bounds.insetBy(dx: 1, dy: 1)
+        let path = NSBezierPath(roundedRect: rect, xRadius: 7, yRadius: 7)
+        color.setFill()
+        path.fill()
+
+        NSColor.white.withAlphaComponent(0.30).setStroke()
+        let highlight = NSBezierPath()
+        highlight.move(to: NSPoint(x: rect.minX + 7, y: rect.maxY - 7))
+        highlight.line(to: NSPoint(x: rect.maxX - 7, y: rect.maxY - 7))
+        highlight.lineWidth = 2
+        highlight.stroke()
+
+        NSColor.separatorColor.withAlphaComponent(0.75).setStroke()
+        path.lineWidth = 1
+        path.stroke()
     }
 }
 
