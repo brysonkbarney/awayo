@@ -13,6 +13,8 @@ It is built for the familiar developer problem: a CLI agent, build, download, te
 
 **Awayo Lock** is intentionally a casual lock screen, not a replacement for the macOS Lock Screen. For real security, use **macOS Lock + Keep Awake**.
 
+Awayo Lock creates an overlay on every connected display, keeps those overlays above normal and full-screen windows, and reasserts itself when macOS Spaces change. It also blocks common keyboard shortcuts and swipe/scroll gestures while the lock is active, while still allowing passcode entry.
+
 ## Run Locally
 
 ```sh

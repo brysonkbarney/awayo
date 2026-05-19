@@ -1,4 +1,5 @@
 import AppKit
+import CoreGraphics
 
 @MainActor
 final class PrivacyOverlayController: NSObject {
@@ -13,6 +14,8 @@ final class PrivacyOverlayController: NSObject {
     private var overlayViews: [PrivacyOverlayView] = []
     private var configuration: Configuration?
     private var previousPresentationOptions: NSApplication.PresentationOptions?
+    private var enforcementTimer: Timer?
+    private var localEventMonitor: Any?
 
     override init() {
         super.init()
@@ -22,10 +25,23 @@ final class PrivacyOverlayController: NSObject {
             name: NSApplication.didChangeScreenParametersNotification,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(applicationDidResignActive),
+            name: NSApplication.didResignActiveNotification,
+            object: nil
+        )
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(activeSpaceChanged),
+            name: NSWorkspace.activeSpaceDidChangeNotification,
+            object: nil
+        )
     }
 
     deinit {
         NotificationCenter.default.removeObserver(self)
+        NSWorkspace.shared.notificationCenter.removeObserver(self)
     }
 
     func show(message: String, endDate: Date?, passcode: String, onUnlock: @escaping () -> Void) {
@@ -48,6 +64,8 @@ final class PrivacyOverlayController: NSObject {
         ]
 
         NSApp.activate(ignoringOtherApps: true)
+        startEventGuard()
+        startEnforcementTimer()
         rebuildWindows()
     }
 
@@ -56,6 +74,8 @@ final class PrivacyOverlayController: NSObject {
     }
 
     func hide() {
+        stopEventGuard()
+        stopEnforcementTimer()
         closeWindows()
         configuration = nil
 
@@ -71,6 +91,30 @@ final class PrivacyOverlayController: NSObject {
         }
 
         rebuildWindows()
+    }
+
+    @objc private func applicationDidResignActive() {
+        guard configuration != nil else {
+            return
+        }
+
+        NSApp.activate(ignoringOtherApps: true)
+        bringWindowsForward()
+    }
+
+    @objc private func activeSpaceChanged() {
+        guard configuration != nil else {
+            return
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            guard let self, self.configuration != nil else {
+                return
+            }
+
+            self.rebuildWindows()
+            self.bringWindowsForward()
+        }
     }
 
     private func rebuildWindows() {
@@ -101,15 +145,20 @@ final class PrivacyOverlayController: NSObject {
                 defer: false,
                 screen: screen
             )
-            window.level = .screenSaver
+            window.level = .awayoLock
             window.collectionBehavior = [
                 .canJoinAllSpaces,
                 .fullScreenAuxiliary,
+                .ignoresCycle,
                 .stationary
             ]
             window.backgroundColor = .black
+            window.hasShadow = false
+            window.hidesOnDeactivate = false
             window.isOpaque = true
+            window.isMovable = false
             window.isReleasedWhenClosed = false
+            window.setFrame(screen.frame, display: true)
             window.contentView = view
             window.orderFrontRegardless()
 
@@ -130,10 +179,91 @@ final class PrivacyOverlayController: NSObject {
         }
     }
 
+    @objc private func enforceLockSurface() {
+        guard configuration != nil else {
+            return
+        }
+
+        if windows.count != NSScreen.screens.count {
+            rebuildWindows()
+            return
+        }
+
+        bringWindowsForward()
+    }
+
+    private func bringWindowsForward() {
+        windows.forEach { window in
+            if let screen = window.screen {
+                window.setFrame(screen.frame, display: true)
+            }
+
+            window.level = .awayoLock
+            window.orderFrontRegardless()
+        }
+
+        let mainWindow = windows.first { $0.screen == NSScreen.main } ?? windows.first
+        mainWindow?.makeKeyAndOrderFront(nil)
+
+        if let unlockField = (mainWindow?.contentView as? PrivacyOverlayView)?.unlockField {
+            mainWindow?.makeFirstResponder(unlockField)
+        }
+    }
+
     private func closeWindows() {
         windows.forEach { $0.orderOut(nil) }
         windows.removeAll()
         overlayViews.removeAll()
+    }
+
+    private func startEnforcementTimer() {
+        enforcementTimer?.invalidate()
+        enforcementTimer = Timer.scheduledTimer(
+            timeInterval: 0.5,
+            target: self,
+            selector: #selector(enforceLockSurface),
+            userInfo: nil,
+            repeats: true
+        )
+    }
+
+    private func stopEnforcementTimer() {
+        enforcementTimer?.invalidate()
+        enforcementTimer = nil
+    }
+
+    private func startEventGuard() {
+        stopEventGuard()
+
+        localEventMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.keyDown, .scrollWheel, .swipe, .magnify, .rotate]
+        ) { [weak self] event in
+            guard self?.configuration != nil else {
+                return event
+            }
+
+            switch event.type {
+            case .scrollWheel, .swipe, .magnify, .rotate:
+                return nil
+            case .keyDown:
+                let blockedModifiers: NSEvent.ModifierFlags = [.command, .control, .option]
+                if event.modifierFlags.intersection(blockedModifiers).isEmpty {
+                    return event
+                }
+
+                NSSound.beep()
+                return nil
+            default:
+                return event
+            }
+        }
+    }
+
+    private func stopEventGuard() {
+        if let localEventMonitor {
+            NSEvent.removeMonitor(localEventMonitor)
+            self.localEventMonitor = nil
+        }
     }
 }
 
@@ -145,4 +275,8 @@ private final class PrivacyOverlayWindow: NSWindow {
     override var canBecomeMain: Bool {
         true
     }
+}
+
+private extension NSWindow.Level {
+    static let awayoLock = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
 }
