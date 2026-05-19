@@ -8,6 +8,8 @@ It is built for the familiar developer problem: a CLI agent, build, download, te
 
 - Keep the Mac awake for 15 minutes, 30 minutes, 1 hour, 2 hours, or until stopped.
 - Start Awayo Lock with a saved passcode, away note, and countdown.
+- Pick from multiple animated Awayo Lock scenes, including Duck Pond and Offline Runner.
+- Let visitors leave sticky notes on the Awayo Lock screen without unlocking the Mac.
 - Start a native macOS Lock Screen while keeping background work awake.
 - Run entirely from the menu bar.
 
@@ -16,6 +18,17 @@ It is built for the familiar developer problem: a CLI agent, build, download, te
 Awayo Lock creates an overlay on every connected display, keeps those overlays above normal and full-screen windows, and reasserts itself when macOS Spaces change. It also blocks common keyboard shortcuts and swipe/scroll gestures while the lock is active, while still allowing passcode entry.
 
 The Awayo Lock passcode is set before starting a lock session and stored in the macOS Keychain.
+
+Current Awayo Lock styles:
+
+- Neon Flow
+- Duck Pond
+- Offline Runner
+- Cosmic Desk
+- Rainy Window
+- Arcade Pulse
+- Paper Notes
+- Synthwave
 
 ## Run Locally
 

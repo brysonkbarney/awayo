@@ -7,6 +7,7 @@ final class PrivacyOverlayController: NSObject {
         let message: String
         let endDate: Date?
         let passcode: String
+        let style: AwayoLockStyle
         let onUnlock: () -> Void
     }
 
@@ -44,11 +45,18 @@ final class PrivacyOverlayController: NSObject {
         NSWorkspace.shared.notificationCenter.removeObserver(self)
     }
 
-    func show(message: String, endDate: Date?, passcode: String, onUnlock: @escaping () -> Void) {
+    func show(
+        message: String,
+        endDate: Date?,
+        passcode: String,
+        style: AwayoLockStyle,
+        onUnlock: @escaping () -> Void
+    ) {
         configuration = Configuration(
             message: message,
             endDate: endDate,
             passcode: passcode,
+            style: style,
             onUnlock: onUnlock
         )
 
@@ -126,7 +134,7 @@ final class PrivacyOverlayController: NSObject {
 
         let mainScreen = NSScreen.main
         var mainWindow: NSWindow?
-        var mainUnlockField: NSSecureTextField?
+        var mainOverlayView: PrivacyOverlayView?
 
         windows = NSScreen.screens.map { screen in
             let isMainDisplay = screen == mainScreen
@@ -134,6 +142,7 @@ final class PrivacyOverlayController: NSObject {
                 message: configuration.message,
                 endDate: configuration.endDate,
                 passcode: configuration.passcode,
+                style: configuration.style,
                 showsUnlockField: isMainDisplay,
                 onUnlock: configuration.onUnlock
             )
@@ -166,17 +175,14 @@ final class PrivacyOverlayController: NSObject {
 
             if isMainDisplay {
                 mainWindow = window
-                mainUnlockField = view.unlockField
+                mainOverlayView = view
             }
 
             return window
         }
 
         mainWindow?.makeKeyAndOrderFront(nil)
-
-        if let mainUnlockField {
-            mainWindow?.makeFirstResponder(mainUnlockField)
-        }
+        mainOverlayView?.focusUnlockFieldIfAppropriate()
     }
 
     @objc private func enforceLockSurface() {
@@ -205,9 +211,7 @@ final class PrivacyOverlayController: NSObject {
         let mainWindow = windows.first { $0.screen == NSScreen.main } ?? windows.first
         mainWindow?.makeKeyAndOrderFront(nil)
 
-        if let unlockField = (mainWindow?.contentView as? PrivacyOverlayView)?.unlockField {
-            mainWindow?.makeFirstResponder(unlockField)
-        }
+        (mainWindow?.contentView as? PrivacyOverlayView)?.focusUnlockFieldIfAppropriate()
     }
 
     private func closeWindows() {

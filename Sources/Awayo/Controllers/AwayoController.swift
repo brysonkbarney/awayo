@@ -7,6 +7,7 @@ final class AwayoController: NSObject {
     private let powerManager = PowerAssertionManager()
     private let privacyOverlay = PrivacyOverlayController()
     private let passcodeStore = KeychainPasscodeStore()
+    private let defaults = UserDefaults.standard
 
     private var session: AwayoSession?
     private var tickTimer: Timer?
@@ -151,7 +152,8 @@ final class AwayoController: NSObject {
         privacyOverlay.show(
             message: details.message,
             endDate: session.endDate,
-            passcode: details.passcode
+            passcode: details.passcode,
+            style: details.style
         ) { [weak self] in
             self?.stopSession()
         }
@@ -304,10 +306,19 @@ final class AwayoController: NSObject {
         messageField.placeholderString = "Message"
         messageField.frame.size.width = 340
 
+        let stylePicker = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: 340, height: 28), pullsDown: false)
+        AwayoLockStyle.allCases.forEach { style in
+            stylePicker.addItem(withTitle: style.title)
+            stylePicker.lastItem?.representedObject = style.rawValue
+        }
+        selectSavedStyle(in: stylePicker)
+
         stack.addArrangedSubview(label("Away message"))
         stack.addArrangedSubview(messageField)
+        stack.addArrangedSubview(label("Style"))
+        stack.addArrangedSubview(stylePicker)
 
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 360, height: 54))
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 360, height: 112))
         container.addSubview(stack)
         NSLayoutConstraint.activate([
             stack.leadingAnchor.constraint(equalTo: container.leadingAnchor),
@@ -325,10 +336,34 @@ final class AwayoController: NSObject {
         }
 
         let message = messageField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let style = selectedStyle(from: stylePicker)
+        defaults.set(style.rawValue, forKey: DefaultsKey.lastAwayoLockStyle)
+
         return AwayoLockDetails(
             message: message.isEmpty ? "Away for a minute. Work is still running." : message,
-            passcode: passcode
+            passcode: passcode,
+            style: style
         )
+    }
+
+    private func selectSavedStyle(in picker: NSPopUpButton) {
+        let rawValue = defaults.string(forKey: DefaultsKey.lastAwayoLockStyle)
+        let style = rawValue.flatMap(AwayoLockStyle.init(rawValue:)) ?? AwayoLockStyle.defaultStyle
+
+        if let index = AwayoLockStyle.allCases.firstIndex(of: style) {
+            picker.selectItem(at: index)
+        }
+    }
+
+    private func selectedStyle(from picker: NSPopUpButton) -> AwayoLockStyle {
+        guard
+            let rawValue = picker.selectedItem?.representedObject as? String,
+            let style = AwayoLockStyle(rawValue: rawValue)
+        else {
+            return .defaultStyle
+        }
+
+        return style
     }
 
     private func savedOrNewAwayoLockPasscode() -> String? {
@@ -446,4 +481,8 @@ final class AwayoController: NSObject {
         alert.alertStyle = .warning
         alert.runModal()
     }
+}
+
+private enum DefaultsKey {
+    static let lastAwayoLockStyle = "lastAwayoLockStyle"
 }

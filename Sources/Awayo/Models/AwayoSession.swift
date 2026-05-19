@@ -26,6 +26,64 @@ struct AwayoSession {
 struct AwayoLockDetails {
     let message: String
     let passcode: String
+    let style: AwayoLockStyle
+}
+
+enum AwayoLockStyle: String, CaseIterable {
+    case neonFlow
+    case duckPond
+    case offlineRunner
+    case cosmicDesk
+    case rainyWindow
+    case arcadePulse
+    case paperNotes
+    case synthwave
+
+    var title: String {
+        switch self {
+        case .neonFlow:
+            "Neon Flow"
+        case .duckPond:
+            "Duck Pond"
+        case .offlineRunner:
+            "Offline Runner"
+        case .cosmicDesk:
+            "Cosmic Desk"
+        case .rainyWindow:
+            "Rainy Window"
+        case .arcadePulse:
+            "Arcade Pulse"
+        case .paperNotes:
+            "Paper Notes"
+        case .synthwave:
+            "Synthwave"
+        }
+    }
+
+    var statusText: String {
+        switch self {
+        case .neonFlow:
+            "WORK IS STILL RUNNING"
+        case .duckPond:
+            "FLOATING BACK SOON"
+        case .offlineRunner:
+            "RUNNING WHILE YOU'RE AWAY"
+        case .cosmicDesk:
+            "ORBITING YOUR TASKS"
+        case .rainyWindow:
+            "RAIN CHECK IN PROGRESS"
+        case .arcadePulse:
+            "INSERT PASSCODE TO RESUME"
+        case .paperNotes:
+            "LEAVE A NOTE IF YOU STOPPED BY"
+        case .synthwave:
+            "BUILDING IN THE DISTANCE"
+        }
+    }
+
+    static var defaultStyle: AwayoLockStyle {
+        .duckPond
+    }
 }
 
 struct DurationPreset {
