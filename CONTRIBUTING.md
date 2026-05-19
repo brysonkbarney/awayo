@@ -9,6 +9,7 @@ For now, keep changes small and focused. The project is early, so issues and pul
 ```sh
 swift build
 swift run Awayo
+Scripts/package_app.sh
 ```
 
 ## Product Principles

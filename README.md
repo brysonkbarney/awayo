@@ -4,7 +4,7 @@ Awayo is a tiny macOS menu bar app for stepping away while your work keeps runni
 
 It is built for the familiar developer problem: a CLI agent, build, download, test suite, or local service needs the Mac to stay awake, but leaving the desktop visible feels sketchy.
 
-## MVP
+## What It Does
 
 - Keep the Mac awake for 15 minutes, 30 minutes, 1 hour, 2 hours, or until stopped.
 - Start a privacy cover with an away note, countdown, and passcode.
@@ -21,9 +21,23 @@ swift run Awayo
 
 The app appears in the macOS menu bar. Quit it from the Awayo menu.
 
+## Build the Mac App
+
+```sh
+Scripts/package_app.sh
+Scripts/open_app.sh
+```
+
+The packaging script builds a release binary, creates `dist/Awayo.app`, and ad-hoc signs it for local testing.
+
+For a full launch smoke test:
+
+```sh
+Scripts/smoke_test.sh
+```
+
 ## Roadmap
 
-- Package as a signed `.app`.
 - Add a better first-run onboarding flow.
 - Add themes, videos, and custom away cards.
 - Add keyboard shortcuts.
@@ -34,6 +48,7 @@ The app appears in the macOS menu bar. Quit it from the Awayo menu.
 
 ```sh
 swift build
+Scripts/package_app.sh
 ```
 
 ## License
