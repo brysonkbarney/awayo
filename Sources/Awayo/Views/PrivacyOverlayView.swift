@@ -4,7 +4,7 @@ import AppKit
 final class PrivacyOverlayView: NSView {
     let unlockField = NSSecureTextField()
 
-    private let style: AwayoLockStyle
+    private let awayoAppearance: AwayoAppearance
     private let badgeLabel = NSTextField(labelWithString: "  AWAYO LOCK  ")
     private let statusLabel = NSTextField(labelWithString: "")
     private let messageLabel = NSTextField(labelWithString: "")
@@ -24,18 +24,23 @@ final class PrivacyOverlayView: NSView {
     private var animationTimer: Timer?
     private var animationPhase: CGFloat = 0
     private var stickyNotes: [AwayoStickyNote] = []
+    private var floatingNoteViews: [StickyNoteCardView] = []
+    private var pendingNotePoint: NSPoint?
     private var noteComposerActive = false
+    private var style: AwayoLockStyle {
+        awayoAppearance.backgroundStyle
+    }
 
     init(
         message: String,
         endDate: Date?,
-        style: AwayoLockStyle,
+        appearance: AwayoAppearance,
         verifyPasscode: @escaping (String) -> Bool,
         showsUnlockField: Bool,
         onUnlock: @escaping () -> Void
     ) {
         self.verifyPasscode = verifyPasscode
-        self.style = style
+        self.awayoAppearance = appearance
         self.showsUnlockField = showsUnlockField
         self.onUnlock = onUnlock
         super.init(frame: .zero)
@@ -51,6 +56,20 @@ final class PrivacyOverlayView: NSView {
 
     override var acceptsFirstResponder: Bool {
         true
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        let hitView = super.hitTest(point)
+        guard showsUnlockField, let hitView, hitView !== self else {
+            return hitView
+        }
+
+        let interactiveViews: [NSView] = [unlockField, unlockButton, notePanel]
+        if interactiveViews.contains(where: { hitView === $0 || hitView.isDescendant(of: $0) }) {
+            return hitView
+        }
+
+        return self
     }
 
     override func viewWillMove(toWindow newWindow: NSWindow?) {
@@ -69,6 +88,25 @@ final class PrivacyOverlayView: NSView {
         }
     }
 
+    override func mouseDown(with event: NSEvent) {
+        guard showsUnlockField else {
+            return
+        }
+
+        let point = convert(event.locationInWindow, from: nil)
+        let ignoredViews: [NSView] = [unlockField, unlockButton, notePanel]
+        let clickedControl = ignoredViews.contains { view in
+            view.convert(view.bounds, to: self).insetBy(dx: -14, dy: -14).contains(point)
+        }
+
+        guard !clickedControl else {
+            super.mouseDown(with: event)
+            return
+        }
+
+        showNoteComposer(at: point)
+    }
+
     func focusUnlockFieldIfAppropriate() {
         guard showsUnlockField, !noteComposerActive else {
             return
@@ -83,10 +121,11 @@ final class PrivacyOverlayView: NSView {
         let availableWidth = max(300, bounds.width - 96)
         let noteAwareWidth = showsUnlockField && bounds.width > 1200 ? min(900, availableWidth - 340) : min(960, availableWidth)
         messageLabel.preferredMaxLayoutWidth = max(360, noteAwareWidth)
-        messageLabel.font = .systemFont(ofSize: bounds.width < 760 ? 34 : 58, weight: .black)
-        countdownLabel.font = .monospacedDigitSystemFont(ofSize: bounds.width < 760 ? 48 : 86, weight: .heavy)
+        messageLabel.font = messageFont(compact: bounds.width < 760)
+        countdownLabel.font = timerFont(compact: bounds.width < 760)
         backAtLabel.font = .systemFont(ofSize: bounds.width < 760 ? 16 : 20, weight: .semibold)
         activityLabel.font = .systemFont(ofSize: bounds.width < 760 ? 14 : 16, weight: .medium)
+        positionFloatingNotes()
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -161,6 +200,8 @@ final class PrivacyOverlayView: NSView {
         activityLabel.preferredMaxLayoutWidth = 640
 
         update(endDate: endDate)
+        applyDashboardStyle(to: content)
+        applyTimerStyle()
 
         content.addArrangedSubview(topRow)
         content.addArrangedSubview(messageLabel)
@@ -232,7 +273,7 @@ final class PrivacyOverlayView: NSView {
         notePanel.translatesAutoresizingMaskIntoConstraints = false
         notePanel.wantsLayer = true
         notePanel.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.24).cgColor
-        notePanel.layer?.cornerRadius = 18
+        notePanel.layer?.cornerRadius = 8
         notePanel.layer?.borderWidth = 1
         notePanel.layer?.borderColor = NSColor.white.withAlphaComponent(0.16).cgColor
         addSubview(notePanel)
@@ -241,7 +282,7 @@ final class PrivacyOverlayView: NSView {
         title.font = .systemFont(ofSize: 15, weight: .heavy)
         title.textColor = .white
 
-        let subtitle = NSTextField(labelWithString: "Visitors can leave a note without unlocking.")
+        let subtitle = NSTextField(labelWithString: "Visitors can click anywhere to leave a note.")
         subtitle.font = .systemFont(ofSize: 12, weight: .medium)
         subtitle.textColor = NSColor.white.withAlphaComponent(0.56)
         subtitle.maximumNumberOfLines = 2
@@ -250,7 +291,7 @@ final class PrivacyOverlayView: NSView {
         notesStack.alignment = .leading
         notesStack.spacing = 8
 
-        let leaveButton = NSButton(title: "Leave a sticky note", target: self, action: #selector(showNoteComposer))
+        let leaveButton = NSButton(title: "Leave a sticky note", target: self, action: #selector(showNoteComposerFromButton))
         leaveButton.bezelStyle = .rounded
         leaveButton.controlSize = .regular
         leaveButton.font = .systemFont(ofSize: 13, weight: .bold)
@@ -320,11 +361,21 @@ final class PrivacyOverlayView: NSView {
         }
 
         stickyNotes.suffix(3).forEach { note in
-            notesStack.addArrangedSubview(StickyNoteCardView(note: note))
+            notesStack.addArrangedSubview(StickyNoteCardView(note: note, style: awayoAppearance.noteStyle))
         }
     }
 
-    @objc private func showNoteComposer() {
+    @objc private func showNoteComposerFromButton() {
+        pendingNotePoint = NSPoint(x: bounds.width - 210, y: bounds.height - 190)
+        activateNoteComposer()
+    }
+
+    private func showNoteComposer(at point: NSPoint) {
+        pendingNotePoint = point
+        activateNoteComposer()
+    }
+
+    private func activateNoteComposer() {
         noteComposerActive = true
         noteComposer.isHidden = false
         noteNameField.stringValue = ""
@@ -346,15 +397,127 @@ final class PrivacyOverlayView: NSView {
         }
 
         let author = noteNameField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let position = pendingNotePoint ?? NSPoint(x: bounds.midX, y: bounds.midY)
         stickyNotes.append(AwayoStickyNote(
             author: author.isEmpty ? "Visitor" : author,
             message: message,
-            colorIndex: stickyNotes.count
+            colorIndex: stickyNotes.count,
+            position: position
         ))
+        pendingNotePoint = nil
         noteComposerActive = false
         noteComposer.isHidden = true
         renderStickyNotes()
+        renderFloatingNotes()
         window?.makeFirstResponder(unlockField)
+    }
+
+    private func renderFloatingNotes() {
+        floatingNoteViews.forEach { $0.removeFromSuperview() }
+        floatingNoteViews = stickyNotes.map { note in
+            let card = StickyNoteCardView(note: note, style: awayoAppearance.noteStyle, usesConstraints: false)
+            addSubview(card, positioned: .above, relativeTo: nil)
+            return card
+        }
+        positionFloatingNotes()
+    }
+
+    private func positionFloatingNotes() {
+        zip(stickyNotes, floatingNoteViews).forEach { note, view in
+            let size = NSSize(width: 286, height: 104)
+            let minX: CGFloat = 22
+            let maxX = max(minX, bounds.width - size.width - 22)
+            let minY: CGFloat = 22
+            let maxY = max(minY, bounds.height - size.height - 22)
+            let x = min(max(note.position.x - size.width / 2, minX), maxX)
+            let y = min(max(note.position.y - size.height / 2, minY), maxY)
+            view.frame = NSRect(origin: NSPoint(x: x, y: y), size: size)
+        }
+    }
+
+    private func applyDashboardStyle(to content: NSStackView) {
+        content.edgeInsets = NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
+        content.wantsLayer = true
+        content.layer?.backgroundColor = NSColor.clear.cgColor
+        content.layer?.borderWidth = 0
+        content.layer?.cornerRadius = 8
+        content.spacing = 18
+
+        switch awayoAppearance.dashboardStyle {
+        case .centerStage:
+            messageLabel.textColor = .white
+            activityLabel.isHidden = false
+        case .paperDesk:
+            content.edgeInsets = NSEdgeInsets(top: 26, left: 34, bottom: 26, right: 34)
+            content.layer?.backgroundColor = NSColor(calibratedWhite: 0.98, alpha: 0.16).cgColor
+            content.layer?.borderWidth = 1
+            content.layer?.borderColor = NSColor.white.withAlphaComponent(0.22).cgColor
+            messageLabel.textColor = NSColor(calibratedRed: 1.0, green: 0.97, blue: 0.84, alpha: 1)
+            activityLabel.isHidden = false
+        case .minimalBadge:
+            content.spacing = 12
+            messageLabel.textColor = .white
+            activityLabel.isHidden = true
+        case .commandCenter:
+            content.edgeInsets = NSEdgeInsets(top: 28, left: 38, bottom: 28, right: 38)
+            content.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.28).cgColor
+            content.layer?.borderWidth = 1
+            content.layer?.borderColor = NSColor.white.withAlphaComponent(0.18).cgColor
+            messageLabel.textColor = .white
+            activityLabel.isHidden = false
+        }
+    }
+
+    private func applyTimerStyle() {
+        countdownLabel.wantsLayer = true
+        countdownLabel.layer?.cornerRadius = 8
+        countdownLabel.layer?.masksToBounds = true
+        countdownLabel.layer?.borderWidth = 0
+
+        switch awayoAppearance.timerStyle {
+        case .heroCountdown:
+            countdownLabel.textColor = .white
+            countdownLabel.layer?.backgroundColor = NSColor.clear.cgColor
+        case .paperClock:
+            countdownLabel.textColor = NSColor(calibratedRed: 0.16, green: 0.12, blue: 0.09, alpha: 1)
+            countdownLabel.layer?.backgroundColor = NSColor(calibratedRed: 1.0, green: 0.91, blue: 0.54, alpha: 0.90).cgColor
+        case .glassPill:
+            countdownLabel.textColor = .white
+            countdownLabel.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.16).cgColor
+            countdownLabel.layer?.borderWidth = 1
+            countdownLabel.layer?.borderColor = NSColor.white.withAlphaComponent(0.24).cgColor
+        case .terminalTicker:
+            countdownLabel.textColor = NSColor(calibratedRed: 0.48, green: 1.0, blue: 0.66, alpha: 1)
+            countdownLabel.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.42).cgColor
+            countdownLabel.layer?.borderWidth = 1
+            countdownLabel.layer?.borderColor = NSColor(calibratedRed: 0.48, green: 1.0, blue: 0.66, alpha: 0.34).cgColor
+        }
+    }
+
+    private func messageFont(compact: Bool) -> NSFont {
+        switch awayoAppearance.dashboardStyle {
+        case .centerStage:
+            .systemFont(ofSize: compact ? 34 : 58, weight: .black)
+        case .paperDesk:
+            .systemFont(ofSize: compact ? 32 : 52, weight: .heavy)
+        case .minimalBadge:
+            .systemFont(ofSize: compact ? 28 : 44, weight: .bold)
+        case .commandCenter:
+            .systemFont(ofSize: compact ? 32 : 54, weight: .black)
+        }
+    }
+
+    private func timerFont(compact: Bool) -> NSFont {
+        switch awayoAppearance.timerStyle {
+        case .heroCountdown:
+            .monospacedDigitSystemFont(ofSize: compact ? 48 : 86, weight: .heavy)
+        case .paperClock:
+            .systemFont(ofSize: compact ? 44 : 78, weight: .black)
+        case .glassPill:
+            .monospacedDigitSystemFont(ofSize: compact ? 38 : 64, weight: .bold)
+        case .terminalTicker:
+            .monospacedSystemFont(ofSize: compact ? 34 : 56, weight: .bold)
+        }
     }
 
     private func configurePillLabel(_ label: NSTextField, foreground: NSColor, background: NSColor) {
@@ -876,19 +1039,24 @@ private struct AwayoStickyNote {
     let author: String
     let message: String
     let colorIndex: Int
+    let position: NSPoint
 }
 
 @MainActor
 private final class StickyNoteCardView: NSView {
     private let note: AwayoStickyNote
+    private let style: AwayoNoteStyle
 
-    init(note: AwayoStickyNote) {
+    init(note: AwayoStickyNote, style: AwayoNoteStyle, usesConstraints: Bool = true) {
         self.note = note
+        self.style = style
         super.init(frame: NSRect(x: 0, y: 0, width: 280, height: 92))
         wantsLayer = true
-        translatesAutoresizingMaskIntoConstraints = false
-        widthAnchor.constraint(equalToConstant: 282).isActive = true
-        heightAnchor.constraint(greaterThanOrEqualToConstant: 86).isActive = true
+        translatesAutoresizingMaskIntoConstraints = !usesConstraints
+        if usesConstraints {
+            widthAnchor.constraint(equalToConstant: 282).isActive = true
+            heightAnchor.constraint(greaterThanOrEqualToConstant: 86).isActive = true
+        }
         setup()
     }
 
@@ -898,27 +1066,29 @@ private final class StickyNoteCardView: NSView {
 
     private func setup() {
         layer?.backgroundColor = cardColor.cgColor
-        layer?.cornerRadius = 10
+        layer?.cornerRadius = style == .glassCard ? 8 : 6
         layer?.shadowColor = NSColor.black.cgColor
-        layer?.shadowOpacity = 0.18
-        layer?.shadowRadius = 8
+        layer?.shadowOpacity = style == .glassCard ? 0.26 : 0.18
+        layer?.shadowRadius = style == .glassCard ? 14 : 8
         layer?.shadowOffset = NSSize(width: 0, height: -2)
+        layer?.borderWidth = style == .glassCard ? 1 : 0
+        layer?.borderColor = NSColor.white.withAlphaComponent(0.28).cgColor
 
         let stack = NSStackView()
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 4
-        stack.edgeInsets = NSEdgeInsets(top: 10, left: 12, bottom: 10, right: 12)
+        stack.edgeInsets = NSEdgeInsets(top: style == .tapedPaper ? 16 : 10, left: 12, bottom: 10, right: 12)
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
 
         let author = NSTextField(labelWithString: "from \(note.author)")
-        author.font = .systemFont(ofSize: 12, weight: .heavy)
-        author.textColor = NSColor.black.withAlphaComponent(0.66)
+        author.font = authorFont
+        author.textColor = secondaryTextColor
 
         let message = NSTextField(labelWithString: note.message)
-        message.font = .systemFont(ofSize: 13, weight: .semibold)
-        message.textColor = NSColor.black.withAlphaComponent(0.82)
+        message.font = messageFont
+        message.textColor = primaryTextColor
         message.maximumNumberOfLines = 3
         message.lineBreakMode = .byWordWrapping
         message.preferredMaxLayoutWidth = 250
@@ -934,18 +1104,100 @@ private final class StickyNoteCardView: NSView {
         ])
     }
 
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+
+        switch style {
+        case .tapedPaper:
+            drawTape()
+        case .stickyStack:
+            drawStackShadow()
+        case .glassCard:
+            drawGlassSheen()
+        case .markerCard:
+            drawMarkerStroke()
+        }
+    }
+
     private var cardColor: NSColor {
+        switch style {
+        case .glassCard:
+            return NSColor.white.withAlphaComponent(0.22)
+        case .markerCard:
+            return NSColor(calibratedWhite: 0.98, alpha: 0.96)
+        case .tapedPaper, .stickyStack:
+            break
+        }
+
         switch note.colorIndex % 5 {
         case 0:
-            NSColor(calibratedRed: 1.00, green: 0.89, blue: 0.38, alpha: 0.96)
+            return NSColor(calibratedRed: 1.00, green: 0.89, blue: 0.38, alpha: 0.96)
         case 1:
-            NSColor(calibratedRed: 0.63, green: 0.94, blue: 0.86, alpha: 0.96)
+            return NSColor(calibratedRed: 0.63, green: 0.94, blue: 0.86, alpha: 0.96)
         case 2:
-            NSColor(calibratedRed: 1.00, green: 0.68, blue: 0.78, alpha: 0.96)
+            return NSColor(calibratedRed: 1.00, green: 0.68, blue: 0.78, alpha: 0.96)
         case 3:
-            NSColor(calibratedRed: 0.77, green: 0.72, blue: 1.00, alpha: 0.96)
+            return NSColor(calibratedRed: 0.77, green: 0.72, blue: 1.00, alpha: 0.96)
         default:
-            NSColor(calibratedRed: 0.95, green: 0.95, blue: 0.86, alpha: 0.96)
+            return NSColor(calibratedRed: 0.95, green: 0.95, blue: 0.86, alpha: 0.96)
         }
+    }
+
+    private var authorFont: NSFont {
+        switch style {
+        case .markerCard:
+            .systemFont(ofSize: 12, weight: .black)
+        case .tapedPaper:
+            .systemFont(ofSize: 12, weight: .heavy)
+        case .stickyStack, .glassCard:
+            .systemFont(ofSize: 12, weight: .bold)
+        }
+    }
+
+    private var messageFont: NSFont {
+        switch style {
+        case .markerCard:
+            .systemFont(ofSize: 14, weight: .bold)
+        case .tapedPaper:
+            .systemFont(ofSize: 13, weight: .semibold)
+        case .stickyStack:
+            .systemFont(ofSize: 13, weight: .bold)
+        case .glassCard:
+            .systemFont(ofSize: 13, weight: .semibold)
+        }
+    }
+
+    private var primaryTextColor: NSColor {
+        style == .glassCard ? .white : NSColor.black.withAlphaComponent(0.82)
+    }
+
+    private var secondaryTextColor: NSColor {
+        style == .glassCard ? NSColor.white.withAlphaComponent(0.72) : NSColor.black.withAlphaComponent(0.60)
+    }
+
+    private func drawTape() {
+        NSColor.white.withAlphaComponent(0.64).setFill()
+        NSBezierPath(roundedRect: NSRect(x: bounds.midX - 34, y: bounds.maxY - 11, width: 68, height: 16), xRadius: 3, yRadius: 3).fill()
+    }
+
+    private func drawStackShadow() {
+        NSColor.white.withAlphaComponent(0.24).setStroke()
+        let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 7, dy: 7).offsetBy(dx: 6, dy: -6), xRadius: 6, yRadius: 6)
+        path.lineWidth = 2
+        path.stroke()
+    }
+
+    private func drawGlassSheen() {
+        NSColor.white.withAlphaComponent(0.18).setFill()
+        NSBezierPath(roundedRect: NSRect(x: 12, y: bounds.maxY - 28, width: bounds.width - 24, height: 2), xRadius: 1, yRadius: 1).fill()
+    }
+
+    private func drawMarkerStroke() {
+        NSColor.black.withAlphaComponent(0.18).setStroke()
+        let path = NSBezierPath()
+        path.move(to: NSPoint(x: 14, y: 18))
+        path.line(to: NSPoint(x: bounds.width - 18, y: 22))
+        path.lineWidth = 3
+        path.stroke()
     }
 }

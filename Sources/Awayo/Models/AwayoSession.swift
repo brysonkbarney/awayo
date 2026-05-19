@@ -25,7 +25,6 @@ struct AwayoSession {
 
 struct AwayoLockDetails {
     let message: String
-    let style: AwayoLockStyle
 }
 
 enum AwayoLockStyle: String, CaseIterable {

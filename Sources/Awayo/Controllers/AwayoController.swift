@@ -8,6 +8,13 @@ final class AwayoController: NSObject {
     private let privacyOverlay = PrivacyOverlayController()
     private let passcodeStore = PasscodeStore()
     private let defaults = UserDefaults.standard
+    private lazy var settingsStore = AwayoSettingsStore(defaults: defaults)
+    private lazy var settingsWindowController = AwayoSettingsWindowController(
+        settingsStore: settingsStore,
+        passcodeStore: passcodeStore
+    ) { [weak self] in
+        self?.refreshMenu()
+    }
 
     private var session: AwayoSession?
     private var tickTimer: Timer?
@@ -15,6 +22,12 @@ final class AwayoController: NSObject {
     func start() {
         configureStatusItem()
         refreshMenu()
+
+        if !settingsStore.hasCompletedFirstRun {
+            DispatchQueue.main.async { [weak self] in
+                self?.showSettings(onboarding: true)
+            }
+        }
     }
 
     func shutdown() {
@@ -46,42 +59,49 @@ final class AwayoController: NSObject {
             menu.addItem(NSMenuItem.separator())
         }
 
-        let privacyMenu = NSMenu()
-        privacyMenu.addItem(menuItem(title: passcodeMenuTitle(), action: #selector(setAwayoLockPasscode)))
-        privacyMenu.addItem(NSMenuItem.separator())
+        let privacyMenu = NSMenu(title: "Awayo Lock")
         addDurationItems(
             to: privacyMenu,
             action: #selector(startPrivacyCoverFromMenu(_:)),
             suffix: "..."
         )
-        menu.setSubmenu(privacyMenu, for: menu.addItem(withTitle: "Awayo Lock", action: nil, keyEquivalent: ""))
+        privacyMenu.addItem(NSMenuItem.separator())
+        privacyMenu.addItem(menuItem(title: "Awayo Settings...", action: #selector(openSettings), symbol: "gearshape"))
+        let privacyItem = submenuItem(title: "Awayo Lock", symbol: "lock.rectangle")
+        menu.addItem(privacyItem)
+        menu.setSubmenu(privacyMenu, for: privacyItem)
 
-        let awakeMenu = NSMenu()
+        let awakeMenu = NSMenu(title: "Keep Awake Only")
         addDurationItems(
             to: awakeMenu,
             action: #selector(startKeepAwakeFromMenu(_:)),
             suffix: ""
         )
-        menu.setSubmenu(awakeMenu, for: menu.addItem(withTitle: "Keep Awake Only", action: nil, keyEquivalent: ""))
+        let awakeItem = submenuItem(title: "Keep Awake Only", symbol: "cup.and.saucer")
+        menu.addItem(awakeItem)
+        menu.setSubmenu(awakeMenu, for: awakeItem)
 
-        let lockMenu = NSMenu()
+        let lockMenu = NSMenu(title: "macOS Lock + Keep Awake")
         addDurationItems(
             to: lockMenu,
             action: #selector(startLockScreenFromMenu(_:)),
             suffix: ""
         )
-        menu.setSubmenu(lockMenu, for: menu.addItem(withTitle: "macOS Lock + Keep Awake", action: nil, keyEquivalent: ""))
+        let lockItem = submenuItem(title: "macOS Lock + Keep Awake", symbol: "lock.display")
+        menu.addItem(lockItem)
+        menu.setSubmenu(lockMenu, for: lockItem)
 
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(menuItem(title: "Custom Duration...", action: #selector(startCustomDuration)))
+        menu.addItem(menuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ",", symbol: "gearshape"))
+        menu.addItem(menuItem(title: "Custom Duration...", action: #selector(startCustomDuration), symbol: "timer"))
 
         if session != nil {
-            menu.addItem(menuItem(title: "Stop Awayo", action: #selector(stopAwayo)))
+            menu.addItem(menuItem(title: "Stop Awayo", action: #selector(stopAwayo), symbol: "stop.circle"))
         }
 
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(menuItem(title: "About Awayo", action: #selector(showAbout)))
-        menu.addItem(menuItem(title: "Quit Awayo", action: #selector(quitAwayo), keyEquivalent: "q"))
+        menu.addItem(menuItem(title: "About Awayo", action: #selector(showAbout), symbol: "info.circle"))
+        menu.addItem(menuItem(title: "Quit Awayo", action: #selector(quitAwayo), keyEquivalent: "q", symbol: "xmark.circle"))
 
         statusItem.menu = menu
         refreshStatusButton()
@@ -101,20 +121,25 @@ final class AwayoController: NSObject {
 
     private func addDurationItems(to menu: NSMenu, action: Selector, suffix: String) {
         DurationPreset.standard.forEach { preset in
-            let item = menuItem(title: preset.title + suffix, action: action)
+            let item = menuItem(title: preset.title + suffix, action: action, symbol: "clock")
             item.representedObject = preset.representedValue
             menu.addItem(item)
         }
     }
 
-    private func menuItem(title: String, action: Selector, keyEquivalent: String = "") -> NSMenuItem {
+    private func menuItem(title: String, action: Selector, keyEquivalent: String = "", symbol: String? = nil) -> NSMenuItem {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: keyEquivalent)
         item.target = self
+        item.image = symbol.flatMap {
+            NSImage(systemSymbolName: $0, accessibilityDescription: title)
+        }
         return item
     }
 
-    private func passcodeMenuTitle() -> String {
-        passcodeStore.hasPasscode() ? "Change Awayo Lock Passcode..." : "Set Awayo Lock Passcode..."
+    private func submenuItem(title: String, symbol: String) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: title)
+        return item
     }
 
     @objc private func startKeepAwakeFromMenu(_ sender: NSMenuItem) {
@@ -152,7 +177,7 @@ final class AwayoController: NSObject {
         privacyOverlay.show(
             message: details.message,
             endDate: session.endDate,
-            style: details.style,
+            appearance: settingsStore.appearance(),
             verifyPasscode: { [passcodeStore] passcode in
                 passcodeStore.verify(passcode)
             }
@@ -204,8 +229,15 @@ final class AwayoController: NSObject {
     }
 
     @objc private func setAwayoLockPasscode() {
-        _ = promptToSetAwayoLockPasscode(required: false)
-        refreshMenu()
+        showSettings(onboarding: false)
+    }
+
+    @objc private func openSettings() {
+        showSettings(onboarding: false)
+    }
+
+    private func showSettings(onboarding: Bool) {
+        settingsWindowController.show(onboarding: onboarding)
     }
 
     @objc private func showAbout() {
@@ -296,7 +328,7 @@ final class AwayoController: NSObject {
 
         let alert = NSAlert()
         alert.messageText = "Start Awayo Lock"
-        alert.informativeText = "Choose the note people will see. Unlocking uses your saved Awayo Lock passcode."
+        alert.informativeText = "Choose the note people will see. Backgrounds, timer, dashboard, sticky notes, and passcode live in Awayo Settings."
         alert.alertStyle = .informational
 
         let stack = NSStackView()
@@ -308,19 +340,10 @@ final class AwayoController: NSObject {
         messageField.placeholderString = "Message"
         messageField.frame.size.width = 340
 
-        let stylePicker = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: 340, height: 28), pullsDown: false)
-        AwayoLockStyle.allCases.forEach { style in
-            stylePicker.addItem(withTitle: style.title)
-            stylePicker.lastItem?.representedObject = style.rawValue
-        }
-        selectSavedStyle(in: stylePicker)
-
         stack.addArrangedSubview(label("Away message"))
         stack.addArrangedSubview(messageField)
-        stack.addArrangedSubview(label("Style"))
-        stack.addArrangedSubview(stylePicker)
 
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 360, height: 112))
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 360, height: 54))
         container.addSubview(stack)
         NSLayoutConstraint.activate([
             stack.leadingAnchor.constraint(equalTo: container.leadingAnchor),
@@ -338,33 +361,10 @@ final class AwayoController: NSObject {
         }
 
         let message = messageField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        let style = selectedStyle(from: stylePicker)
-        defaults.set(style.rawValue, forKey: DefaultsKey.lastAwayoLockStyle)
 
         return AwayoLockDetails(
-            message: message.isEmpty ? "Away for a minute. Work is still running." : message,
-            style: style
+            message: message.isEmpty ? "Away for a minute. Work is still running." : message
         )
-    }
-
-    private func selectSavedStyle(in picker: NSPopUpButton) {
-        let rawValue = defaults.string(forKey: DefaultsKey.lastAwayoLockStyle)
-        let style = rawValue.flatMap(AwayoLockStyle.init(rawValue:)) ?? AwayoLockStyle.defaultStyle
-
-        if let index = AwayoLockStyle.allCases.firstIndex(of: style) {
-            picker.selectItem(at: index)
-        }
-    }
-
-    private func selectedStyle(from picker: NSPopUpButton) -> AwayoLockStyle {
-        guard
-            let rawValue = picker.selectedItem?.representedObject as? String,
-            let style = AwayoLockStyle(rawValue: rawValue)
-        else {
-            return .defaultStyle
-        }
-
-        return style
     }
 
     private func ensureAwayoLockPasscodeExists() -> Bool {
@@ -372,65 +372,8 @@ final class AwayoController: NSObject {
             return true
         }
 
-        return promptToSetAwayoLockPasscode(required: true)
-    }
-
-    private func promptToSetAwayoLockPasscode(required: Bool) -> Bool {
-        let alert = NSAlert()
-        alert.messageText = required ? "Set Awayo Lock Passcode" : "Change Awayo Lock Passcode"
-        alert.informativeText = "This passcode unlocks Awayo Lock. Awayo stores a salted hash locally, not the passcode itself."
-        alert.alertStyle = .informational
-
-        let stack = NSStackView()
-        stack.orientation = .vertical
-        stack.spacing = 8
-        stack.translatesAutoresizingMaskIntoConstraints = false
-
-        let passcodeField = NSSecureTextField()
-        passcodeField.placeholderString = "New passcode"
-        passcodeField.frame.size.width = 340
-
-        let confirmationField = NSSecureTextField()
-        confirmationField.placeholderString = "Confirm passcode"
-        confirmationField.frame.size.width = 340
-
-        stack.addArrangedSubview(label("New passcode"))
-        stack.addArrangedSubview(passcodeField)
-        stack.addArrangedSubview(label("Confirm passcode"))
-        stack.addArrangedSubview(confirmationField)
-
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 360, height: 118))
-        container.addSubview(stack)
-        NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            stack.topAnchor.constraint(equalTo: container.topAnchor),
-            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor)
-        ])
-
-        alert.accessoryView = container
-        alert.addButton(withTitle: "Save")
-        alert.addButton(withTitle: "Cancel")
-
-        guard alert.runModal() == .alertFirstButtonReturn else {
-            return false
-        }
-
-        let passcode = passcodeField.stringValue
-        let confirmation = confirmationField.stringValue
-
-        guard !passcode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            showError("Awayo Lock needs a passcode.")
-            return false
-        }
-
-        guard passcode == confirmation else {
-            showError("The passcodes did not match.")
-            return false
-        }
-
-        passcodeStore.savePasscode(passcode)
-        return true
+        showSettings(onboarding: true)
+        return false
     }
 
     private func label(_ text: String) -> NSTextField {
@@ -472,8 +415,4 @@ final class AwayoController: NSObject {
         alert.alertStyle = .warning
         alert.runModal()
     }
-}
-
-private enum DefaultsKey {
-    static let lastAwayoLockStyle = "lastAwayoLockStyle"
 }
