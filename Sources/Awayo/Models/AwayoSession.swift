@@ -25,7 +25,6 @@ struct AwayoSession {
 
 struct AwayoLockDetails {
     let message: String
-    let passcode: String
     let style: AwayoLockStyle
 }
 

@@ -6,7 +6,7 @@ final class AwayoController: NSObject {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let powerManager = PowerAssertionManager()
     private let privacyOverlay = PrivacyOverlayController()
-    private let passcodeStore = KeychainPasscodeStore()
+    private let passcodeStore = PasscodeStore()
     private let defaults = UserDefaults.standard
 
     private var session: AwayoSession?
@@ -152,8 +152,10 @@ final class AwayoController: NSObject {
         privacyOverlay.show(
             message: details.message,
             endDate: session.endDate,
-            passcode: details.passcode,
-            style: details.style
+            style: details.style,
+            verifyPasscode: { [passcodeStore] passcode in
+                passcodeStore.verify(passcode)
+            }
         ) { [weak self] in
             self?.stopSession()
         }
@@ -288,7 +290,7 @@ final class AwayoController: NSObject {
     }
 
     private func promptForAwayoLockDetails(duration: TimeInterval?) -> AwayoLockDetails? {
-        guard let passcode = savedOrNewAwayoLockPasscode() else {
+        guard ensureAwayoLockPasscodeExists() else {
             return nil
         }
 
@@ -341,7 +343,6 @@ final class AwayoController: NSObject {
 
         return AwayoLockDetails(
             message: message.isEmpty ? "Away for a minute. Work is still running." : message,
-            passcode: passcode,
             style: style
         )
     }
@@ -366,23 +367,18 @@ final class AwayoController: NSObject {
         return style
     }
 
-    private func savedOrNewAwayoLockPasscode() -> String? {
-        do {
-            if let passcode = try passcodeStore.loadPasscode(), !passcode.isEmpty {
-                return passcode
-            }
-        } catch {
-            showError(error.localizedDescription)
-            return nil
+    private func ensureAwayoLockPasscodeExists() -> Bool {
+        if passcodeStore.hasPasscode() {
+            return true
         }
 
         return promptToSetAwayoLockPasscode(required: true)
     }
 
-    private func promptToSetAwayoLockPasscode(required: Bool) -> String? {
+    private func promptToSetAwayoLockPasscode(required: Bool) -> Bool {
         let alert = NSAlert()
         alert.messageText = required ? "Set Awayo Lock Passcode" : "Change Awayo Lock Passcode"
-        alert.informativeText = "This passcode unlocks Awayo Lock. It is saved in your macOS Keychain."
+        alert.informativeText = "This passcode unlocks Awayo Lock. Awayo stores a salted hash locally, not the passcode itself."
         alert.alertStyle = .informational
 
         let stack = NSStackView()
@@ -417,7 +413,7 @@ final class AwayoController: NSObject {
         alert.addButton(withTitle: "Cancel")
 
         guard alert.runModal() == .alertFirstButtonReturn else {
-            return nil
+            return false
         }
 
         let passcode = passcodeField.stringValue
@@ -425,21 +421,16 @@ final class AwayoController: NSObject {
 
         guard !passcode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             showError("Awayo Lock needs a passcode.")
-            return nil
+            return false
         }
 
         guard passcode == confirmation else {
             showError("The passcodes did not match.")
-            return nil
+            return false
         }
 
-        do {
-            try passcodeStore.savePasscode(passcode)
-            return passcode
-        } catch {
-            showError(error.localizedDescription)
-            return nil
-        }
+        passcodeStore.savePasscode(passcode)
+        return true
     }
 
     private func label(_ text: String) -> NSTextField {

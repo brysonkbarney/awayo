@@ -17,7 +17,7 @@ It is built for the familiar developer problem: a CLI agent, build, download, te
 
 Awayo Lock creates an overlay on every connected display, keeps those overlays above normal and full-screen windows, and reasserts itself when macOS Spaces change. It also blocks common keyboard shortcuts and swipe/scroll gestures while the lock is active, while still allowing passcode entry.
 
-The Awayo Lock passcode is set before starting a lock session and stored in the macOS Keychain.
+The Awayo Lock passcode is set before starting a lock session. Awayo stores a salted local hash, not the passcode itself, so it does not need Keychain access.
 
 Current Awayo Lock styles:
 

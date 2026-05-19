@@ -17,7 +17,7 @@ final class PrivacyOverlayView: NSView {
     private let noteNameField = NSTextField(string: "")
     private let noteMessageField = NSTextField(string: "")
     private let noteComposer = NSStackView()
-    private let passcode: String
+    private let verifyPasscode: (String) -> Bool
     private let showsUnlockField: Bool
     private let onUnlock: () -> Void
 
@@ -29,12 +29,12 @@ final class PrivacyOverlayView: NSView {
     init(
         message: String,
         endDate: Date?,
-        passcode: String,
         style: AwayoLockStyle,
+        verifyPasscode: @escaping (String) -> Bool,
         showsUnlockField: Bool,
         onUnlock: @escaping () -> Void
     ) {
-        self.passcode = passcode
+        self.verifyPasscode = verifyPasscode
         self.style = style
         self.showsUnlockField = showsUnlockField
         self.onUnlock = onUnlock
@@ -410,7 +410,7 @@ final class PrivacyOverlayView: NSView {
     }
 
     @objc private func checkPasscode() {
-        guard unlockField.stringValue == passcode else {
+        guard verifyPasscode(unlockField.stringValue) else {
             NSSound.beep()
             unlockField.stringValue = ""
             return

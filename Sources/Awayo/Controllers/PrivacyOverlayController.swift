@@ -6,8 +6,8 @@ final class PrivacyOverlayController: NSObject {
     private struct Configuration {
         let message: String
         let endDate: Date?
-        let passcode: String
         let style: AwayoLockStyle
+        let verifyPasscode: (String) -> Bool
         let onUnlock: () -> Void
     }
 
@@ -48,15 +48,15 @@ final class PrivacyOverlayController: NSObject {
     func show(
         message: String,
         endDate: Date?,
-        passcode: String,
         style: AwayoLockStyle,
+        verifyPasscode: @escaping (String) -> Bool,
         onUnlock: @escaping () -> Void
     ) {
         configuration = Configuration(
             message: message,
             endDate: endDate,
-            passcode: passcode,
             style: style,
+            verifyPasscode: verifyPasscode,
             onUnlock: onUnlock
         )
 
@@ -141,8 +141,8 @@ final class PrivacyOverlayController: NSObject {
             let view = PrivacyOverlayView(
                 message: configuration.message,
                 endDate: configuration.endDate,
-                passcode: configuration.passcode,
                 style: configuration.style,
+                verifyPasscode: configuration.verifyPasscode,
                 showsUnlockField: isMainDisplay,
                 onUnlock: configuration.onUnlock
             )
