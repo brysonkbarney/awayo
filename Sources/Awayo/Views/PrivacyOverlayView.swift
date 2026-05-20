@@ -309,7 +309,7 @@ final class PrivacyOverlayView: NSView {
         titleRow.addArrangedSubview(liveDot)
         titleRow.addArrangedSubview(title)
 
-        let subtitle = NSTextField(labelWithString: "hooks + safe process hints")
+        let subtitle = NSTextField(labelWithString: "local titles + process hints")
         subtitle.font = .systemFont(ofSize: 11, weight: .medium)
         subtitle.textColor = NSColor.white.withAlphaComponent(0.46)
 
@@ -363,14 +363,6 @@ final class PrivacyOverlayView: NSView {
         row.alignment = .centerY
         row.spacing = 9
 
-        let dot = NSView()
-        dot.translatesAutoresizingMaskIntoConstraints = false
-        dot.wantsLayer = true
-        dot.layer?.backgroundColor = agentColor(for: session.name).cgColor
-        dot.layer?.cornerRadius = 5
-        dot.widthAnchor.constraint(equalToConstant: 10).isActive = true
-        dot.heightAnchor.constraint(equalToConstant: 10).isActive = true
-
         let copy = NSStackView()
         copy.orientation = .vertical
         copy.alignment = .leading
@@ -392,7 +384,7 @@ final class PrivacyOverlayView: NSView {
         detail.textColor = NSColor.white.withAlphaComponent(0.58)
         detail.lineBreakMode = .byTruncatingMiddle
         detail.maximumNumberOfLines = 1
-        detail.widthAnchor.constraint(lessThanOrEqualToConstant: 246).isActive = true
+        detail.widthAnchor.constraint(lessThanOrEqualToConstant: 220).isActive = true
 
         titleRow.addArrangedSubview(name)
         titleRow.addArrangedSubview(state)
@@ -400,9 +392,71 @@ final class PrivacyOverlayView: NSView {
         copy.addArrangedSubview(titleRow)
         copy.addArrangedSubview(detail)
 
-        row.addArrangedSubview(dot)
+        row.addArrangedSubview(agentIconView(for: session))
         row.addArrangedSubview(copy)
         return row
+    }
+
+    private func agentIconView(for session: AgentSession) -> NSView {
+        let container = NSView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        container.wantsLayer = true
+        container.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.20).cgColor
+        container.layer?.cornerRadius = 7
+        container.layer?.borderWidth = 1
+        container.layer?.borderColor = NSColor.white.withAlphaComponent(0.14).cgColor
+        container.widthAnchor.constraint(equalToConstant: 24).isActive = true
+        container.heightAnchor.constraint(equalToConstant: 24).isActive = true
+
+        if let icon = agentIcon(for: session.name) {
+            let imageView = NSImageView(image: icon)
+            imageView.translatesAutoresizingMaskIntoConstraints = false
+            imageView.imageScaling = .scaleProportionallyUpOrDown
+            container.addSubview(imageView)
+
+            NSLayoutConstraint.activate([
+                imageView.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+                imageView.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+                imageView.widthAnchor.constraint(equalToConstant: 18),
+                imageView.heightAnchor.constraint(equalToConstant: 18)
+            ])
+        } else {
+            let dot = NSView()
+            dot.translatesAutoresizingMaskIntoConstraints = false
+            dot.wantsLayer = true
+            dot.layer?.backgroundColor = agentColor(for: session.name).cgColor
+            dot.layer?.cornerRadius = 5
+            container.addSubview(dot)
+
+            NSLayoutConstraint.activate([
+                dot.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+                dot.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+                dot.widthAnchor.constraint(equalToConstant: 10),
+                dot.heightAnchor.constraint(equalToConstant: 10)
+            ])
+        }
+
+        return container
+    }
+
+    private func agentIcon(for name: String) -> NSImage? {
+        let appPath: String?
+        switch name {
+        case "Codex":
+            appPath = "/Applications/Codex.app"
+        case "Claude", "Claude Code":
+            appPath = "/Applications/Claude.app"
+        default:
+            appPath = nil
+        }
+
+        guard let appPath, FileManager.default.fileExists(atPath: appPath) else {
+            return nil
+        }
+
+        let image = NSWorkspace.shared.icon(forFile: appPath)
+        image.size = NSSize(width: 18, height: 18)
+        return image
     }
 
     private func stateBadge(for state: AgentSession.State) -> NSTextField {

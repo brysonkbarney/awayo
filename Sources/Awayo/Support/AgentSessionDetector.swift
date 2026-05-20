@@ -14,11 +14,22 @@ final class AgentSessionDetector: Sendable {
             seen.insert("\(session.name)|\(session.detail)")
         }
 
-        for row in processRows() {
-            guard let session = agentSession(for: row) else {
-                continue
-            }
+        let rows = processRows()
+        let claudeMetadata = ClaudeCodeSessionMetadataStore().loadIndex()
+        let codexMetadataSessions = codexIsRunning(in: rows)
+            ? CodexSessionMetadataStore().loadRecentSessions(maxCount: 3)
+            : []
+        let includeCodexFallback = codexMetadataSessions.isEmpty
 
+        let detectedSessions = rows.compactMap { row in
+            agentSession(
+                for: row,
+                claudeMetadata: claudeMetadata,
+                includeCodexFallback: includeCodexFallback
+            )
+        } + codexMetadataSessions
+
+        for session in detectedSessions {
             let key = "\(session.name)|\(session.detail)"
             if seen.insert(key).inserted {
                 sessions.append(session)
@@ -33,19 +44,31 @@ final class AgentSessionDetector: Sendable {
         }
     }
 
-    private func agentSession(for row: ProcessRow) -> AgentSession? {
+    private func agentSession(
+        for row: ProcessRow,
+        claudeMetadata: ClaudeCodeSessionMetadataIndex,
+        includeCodexFallback: Bool
+    ) -> AgentSession? {
         let command = row.command
 
         if isClaudeCode(command) {
+            let sessionID = fullResumeID(from: command)
+            let processCwd = cwdPath(for: row.pid)
+            let metadata = sessionID.flatMap { claudeMetadata.byCliSessionID[$0] }
+                ?? processCwd.flatMap { claudeMetadata.byWorkspacePath[$0] }
             return AgentSession(
                 name: "Claude Code",
-                detail: sessionDetail(for: row, fallback: "active session"),
+                detail: claudeDetail(for: metadata, row: row),
                 state: state(for: row)
             )
         }
 
+        if isClaudeDesktop(command) {
+            return AgentSession(name: "Claude", detail: "desktop app open", state: state(for: row))
+        }
+
         if isCodexDesktop(command) {
-            return AgentSession(name: "Codex", detail: "desktop session", state: state(for: row))
+            return includeCodexFallback ? AgentSession(name: "Codex", detail: "desktop session", state: state(for: row)) : nil
         }
 
         if isCodexCli(command) {
@@ -72,13 +95,27 @@ final class AgentSessionDetector: Sendable {
     }
 
     private func isClaudeCode(_ command: String) -> Bool {
-        command.contains("/claude-code/")
-            && command.contains("/Contents/MacOS/claude")
-            && !command.contains("/Contents/Helpers/disclaimer")
+        if command.contains("/Contents/Helpers/disclaimer ") {
+            return false
+        }
+
+        return (command.contains("/claude-code/") && command.contains("/Contents/MacOS/claude"))
+            || command.contains("/local-agent-mode-sessions/")
+    }
+
+    private func isClaudeDesktop(_ command: String) -> Bool {
+        command.contains("/Claude.app/Contents/MacOS/Claude")
     }
 
     private func isCodexDesktop(_ command: String) -> Bool {
         command.contains("/Codex.app/Contents/MacOS/Codex")
+            || command.contains("/Codex.app/Contents/Resources/codex app-server")
+    }
+
+    private func codexIsRunning(in rows: [ProcessRow]) -> Bool {
+        rows.contains { row in
+            isCodexDesktop(row.command) || isCodexCli(row.command)
+        }
     }
 
     private func isCodexCli(_ command: String) -> Bool {
@@ -112,9 +149,25 @@ final class AgentSessionDetector: Sendable {
         }?.1
     }
 
+    private func claudeDetail(for metadata: ClaudeCodeSessionMetadata?, row: ProcessRow) -> String {
+        let title = metadata?.title
+        let workspace = metadata?.workspaceName
+
+        switch (title, workspace) {
+        case let (title?, workspace?) where title != workspace:
+            return "\(title) - \(workspace)"
+        case let (title?, _):
+            return title
+        case let (nil, workspace?):
+            return workspace
+        case (nil, nil):
+            return sessionDetail(for: row, fallback: "active session")
+        }
+    }
+
     private func sessionDetail(for row: ProcessRow, fallback: String) -> String {
         let workspace = workspaceName(from: row.command)
-            ?? cwdName(for: row.pid)
+            ?? cwdPath(for: row.pid).flatMap(displayName)
         let sessionID = resumeID(from: row.command)
 
         switch (workspace, sessionID) {
@@ -130,7 +183,7 @@ final class AgentSessionDetector: Sendable {
     }
 
     private func processRows() -> [ProcessRow] {
-        let output = run("/bin/ps", arguments: ["-axo", "pid=,pcpu=,command="])
+        let output = run("/bin/ps", arguments: ["-axww", "-o", "pid=,pcpu=,command="])
         return output
             .split(separator: "\n", omittingEmptySubsequences: true)
             .compactMap { line in
@@ -155,7 +208,7 @@ final class AgentSessionDetector: Sendable {
             }
     }
 
-    private func cwdName(for pid: Int) -> String? {
+    private func cwdPath(for pid: Int) -> String? {
         let output = run("/usr/sbin/lsof", arguments: ["-a", "-p", "\(pid)", "-d", "cwd", "-Fn"])
         guard let pathLine = output
             .split(separator: "\n", omittingEmptySubsequences: true)
@@ -164,8 +217,7 @@ final class AgentSessionDetector: Sendable {
             return nil
         }
 
-        let path = String(pathLine.dropFirst())
-        return displayName(forPath: path)
+        return String(pathLine.dropFirst())
     }
 
     private func workspaceName(from command: String) -> String? {
@@ -191,23 +243,27 @@ final class AgentSessionDetector: Sendable {
         return nil
     }
 
-    private func resumeID(from command: String) -> String? {
+    private func fullResumeID(from command: String) -> String? {
         let tokens = command.split(separator: " ").map(String.init)
 
         for (index, token) in tokens.enumerated() {
             if token == "--resume", index + 1 < tokens.count {
-                return shortID(tokens[index + 1])
+                return cleanID(tokens[index + 1])
             }
 
             if token.hasPrefix("--resume=") {
-                return shortID(String(token.dropFirst("--resume=".count)))
+                return cleanID(String(token.dropFirst("--resume=".count)))
             }
         }
 
         return nil
     }
 
-    private func shortID(_ value: String) -> String? {
+    private func resumeID(from command: String) -> String? {
+        fullResumeID(from: command).map { String($0.prefix(8)) }
+    }
+
+    private func cleanID(_ value: String) -> String? {
         let cleaned = value
             .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
             .filter { $0.isLetter || $0.isNumber || $0 == "-" }
@@ -216,7 +272,7 @@ final class AgentSessionDetector: Sendable {
             return nil
         }
 
-        return String(cleaned.prefix(8))
+        return cleaned
     }
 
     private func displayName(forPath path: String) -> String? {

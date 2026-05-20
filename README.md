@@ -71,6 +71,11 @@ Scripts/verify_keep_awake.sh
 
 Awayo Lock shows an **agents alive** panel in the top-left corner. It passively detects obvious agent processes like Codex and Claude Code, then shows a safe hint such as the worktree folder or short session id.
 
+When available, Awayo enriches those safe hints with local app metadata:
+
+- Claude Code: maps running `--resume` session ids to local Claude Code titles, cwd, and worktree names.
+- Codex: reads local Codex session titles, cwd, recent activity, and open child-session counts without reading transcript bodies or tool output.
+
 For better status, scripts and agent wrappers can write a tiny local hook:
 
 ```sh
@@ -94,7 +99,7 @@ Hooks are stored at `~/Library/Application Support/Awayo/agent-sessions.json` an
 ## Roadmap
 
 - Add themes, videos, and custom away cards.
-- Add first-class integrations for richer Codex and Claude session state.
+- Add first-class integrations for more agent providers and richer ready-for-input state.
 - Add keyboard shortcuts.
 - Add process-aware sessions, such as "keep awake while `npm test` is running."
 - Add optional launch at login.
