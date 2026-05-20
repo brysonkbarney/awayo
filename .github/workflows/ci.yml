@@ -14,5 +14,7 @@ jobs:
         run: swift build
       - name: Package app
         run: Scripts/package_app.sh
+      - name: Package DMG
+        run: Scripts/package_dmg.sh
       - name: Verify app signature
         run: codesign --verify --deep --strict dist/Awayo.app

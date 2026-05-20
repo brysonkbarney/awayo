@@ -1,0 +1,31 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Validate tag matches VERSION
+        run: |
+          version="$(tr -d '[:space:]' < VERSION)"
+          test "v$version" = "${GITHUB_REF_NAME}"
+      - name: Build DMG
+        run: Scripts/package_dmg.sh
+      - name: Verify app signature
+        run: codesign --verify --deep --strict dist/Awayo.app
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Awayo ${{ github.ref_name }}"
+          files: |
+            dist/Awayo.dmg
+            dist/Awayo-*.dmg
+          generate_release_notes: true

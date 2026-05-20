@@ -7,8 +7,18 @@ APP_DIR="$ROOT_DIR/dist/$APP_NAME.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
+VERSION="$(tr -d '[:space:]' < "$ROOT_DIR/VERSION")"
+BUILD_NUMBER="${AWAYO_BUILD_NUMBER:-}"
 
 cd "$ROOT_DIR"
+
+if [[ -z "$BUILD_NUMBER" ]]; then
+  if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    BUILD_NUMBER="$(git rev-list --count HEAD)"
+  else
+    BUILD_NUMBER="1"
+  fi
+fi
 
 swift build -c release --product "$APP_NAME"
 BIN_DIR="$(swift build -c release --show-bin-path | tail -n 1)"
@@ -18,6 +28,8 @@ mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 
 cp "$BIN_DIR/$APP_NAME" "$MACOS_DIR/$APP_NAME"
 cp "$ROOT_DIR/App/Info.plist" "$CONTENTS_DIR/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$CONTENTS_DIR/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$CONTENTS_DIR/Info.plist"
 swift "$ROOT_DIR/Scripts/generate_icon.swift" "$RESOURCES_DIR/AppIcon.icns"
 chmod 755 "$MACOS_DIR/$APP_NAME"
 

@@ -44,7 +44,7 @@ Run this on macOS:
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/brysonkbarney/awayo/main/Scripts/install.sh)"
 ```
 
-The installer builds Awayo locally, installs it to `~/Applications/Awayo.app`, and opens it.
+The installer downloads the latest release DMG, installs `Awayo.app` to `~/Applications/Awayo.app`, and opens it. If no release DMG exists yet, it falls back to building from source.
 
 To install somewhere else:
 
@@ -59,6 +59,8 @@ For now, the installer requires `git` and the Swift toolchain from Xcode Command
 ```sh
 xcode-select --install
 ```
+
+That requirement only applies to the source-build fallback.
 
 ## Run Locally
 
@@ -79,11 +81,38 @@ Scripts/open_app.sh
 
 The packaging script builds a release binary, creates `dist/Awayo.app`, and ad-hoc signs it for local testing.
 
+To make a local DMG:
+
+```sh
+Scripts/package_dmg.sh
+```
+
+This creates `dist/Awayo-<version>.dmg` and `dist/Awayo.dmg`.
+
 To install the packaged app into `~/Applications`:
 
 ```sh
 Scripts/install.sh
 ```
+
+To force a source build through the installer:
+
+```sh
+Scripts/install.sh --source
+```
+
+## Releases
+
+Awayo uses semver tags and GitHub Releases.
+
+1. Update `VERSION`.
+2. Commit the version change.
+3. Tag the commit, for example `git tag v0.1.0`.
+4. Push the tag with `git push origin v0.1.0`.
+
+The release workflow builds an unsigned/ad-hoc-signed DMG and uploads both `Awayo-<version>.dmg` and `Awayo.dmg`.
+
+Unsigned DMGs work for early web distribution, but macOS may show an “unidentified developer” warning. Users can right-click Awayo and choose **Open**. A future Developer ID notarized build will remove that friction.
 
 For a full launch smoke test:
 
