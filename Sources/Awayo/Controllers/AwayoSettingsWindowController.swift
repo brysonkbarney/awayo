@@ -673,6 +673,9 @@ final class AwayoPreviewTile: NSButton {
     }
 
     private func drawPreview(in rect: NSRect) {
+        NSGraphicsContext.saveGraphicsState()
+        NSBezierPath(roundedRect: rect, xRadius: 8, yRadius: 8).addClip()
+
         switch category {
         case .background:
             drawBackgroundPreview(in: rect)
@@ -683,6 +686,8 @@ final class AwayoPreviewTile: NSButton {
         case .note:
             drawNotePreview(in: rect)
         }
+
+        NSGraphicsContext.restoreGraphicsState()
     }
 
     private func drawBackgroundPreview(in rect: NSRect) {
@@ -815,9 +820,11 @@ final class AwayoPreviewTile: NSButton {
     }
 
     private func roundedGradient(in rect: NSRect, colors: [NSColor]) {
+        NSGraphicsContext.saveGraphicsState()
         let path = NSBezierPath(roundedRect: rect, xRadius: 8, yRadius: 8)
         path.addClip()
         NSGradient(colors: colors)?.draw(in: rect, angle: -35)
+        NSGraphicsContext.restoreGraphicsState()
     }
 
     private func drawMiniDuckPond(in rect: NSRect) {

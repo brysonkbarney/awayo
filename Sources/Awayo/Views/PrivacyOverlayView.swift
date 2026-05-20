@@ -20,6 +20,7 @@ final class PrivacyOverlayView: NSView {
     private let noteComposer = NSStackView()
     private let verifyPasscode: (String) -> Bool
     private let showsUnlockField: Bool
+    private let showsDebugSampleNotes: Bool
     private let onUnlock: () -> Void
 
     private var animationTimer: Timer?
@@ -28,6 +29,7 @@ final class PrivacyOverlayView: NSView {
     private var floatingNoteViews: [StickyNoteCardView] = []
     private var pendingNotePoint: NSPoint?
     private var noteComposerActive = false
+    private var didSeedDebugNotes = false
     private var runnerJumpOffset: CGFloat = 0
     private var runnerVelocity: CGFloat = 0
     private var runnerScore = 0
@@ -39,6 +41,7 @@ final class PrivacyOverlayView: NSView {
         message: String,
         endDate: Date?,
         appearance: AwayoAppearance,
+        showsDebugSampleNotes: Bool = false,
         verifyPasscode: @escaping (String) -> Bool,
         showsUnlockField: Bool,
         onUnlock: @escaping () -> Void
@@ -46,6 +49,7 @@ final class PrivacyOverlayView: NSView {
         self.verifyPasscode = verifyPasscode
         self.awayoAppearance = appearance
         self.showsUnlockField = showsUnlockField
+        self.showsDebugSampleNotes = showsDebugSampleNotes
         self.onUnlock = onUnlock
         super.init(frame: .zero)
 
@@ -141,6 +145,7 @@ final class PrivacyOverlayView: NSView {
         messageLabel.font = messageFont(compact: bounds.width < 760)
         countdownLabel.font = timerFont(compact: bounds.width < 760)
         backAtLabel.font = .systemFont(ofSize: bounds.width < 760 ? 14 : 18, weight: .semibold)
+        seedDebugNotesIfNeeded()
         positionFloatingNotes()
     }
 
@@ -507,6 +512,30 @@ final class PrivacyOverlayView: NSView {
             return card
         }
         positionFloatingNotes()
+    }
+
+    private func seedDebugNotesIfNeeded() {
+        guard showsDebugSampleNotes, showsUnlockField, !didSeedDebugNotes, bounds.width > 0, bounds.height > 0 else {
+            return
+        }
+
+        didSeedDebugNotes = true
+        stickyNotes = [
+            AwayoStickyNote(
+                author: "debug",
+                message: "testing note style",
+                colorIndex: 0,
+                position: NSPoint(x: min(bounds.width * 0.22, 360), y: bounds.height * 0.70)
+            ),
+            AwayoStickyNote(
+                author: "friend",
+                message: "agents still alive",
+                colorIndex: 2,
+                position: NSPoint(x: bounds.width * 0.76, y: bounds.height * 0.66)
+            )
+        ]
+        renderStickyNotes()
+        renderFloatingNotes()
     }
 
     private func positionFloatingNotes() {

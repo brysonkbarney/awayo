@@ -94,6 +94,7 @@ final class AwayoController: NSObject {
         menu.addItem(NSMenuItem.separator())
         menu.addItem(menuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ",", symbol: "gearshape"))
         menu.addItem(menuItem(title: "Custom Duration...", action: #selector(startCustomDuration), symbol: "timer"))
+        addDebugPreviewMenu(to: menu)
 
         if session != nil {
             menu.addItem(menuItem(title: "Stop Awayo", action: #selector(stopAwayo), symbol: "stop.circle"))
@@ -140,6 +141,75 @@ final class AwayoController: NSObject {
         let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
         item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: title)
         return item
+    }
+
+    private func addDebugPreviewMenu(to menu: NSMenu) {
+        menu.addItem(NSMenuItem.separator())
+
+        let debugItem = submenuItem(title: "Debug Preview", symbol: "hammer")
+        let debugMenu = NSMenu(title: "Debug Preview")
+
+        debugMenu.addItem(menuItem(
+            title: "Current Settings (90 Seconds)",
+            action: #selector(startDebugCurrentPreview),
+            symbol: "play.rectangle"
+        ))
+        debugMenu.addItem(NSMenuItem.separator())
+        addDebugBackgroundMenu(to: debugMenu)
+        addDebugTimerMenu(to: debugMenu)
+        addDebugDashboardMenu(to: debugMenu)
+        addDebugNoteMenu(to: debugMenu)
+
+        menu.addItem(debugItem)
+        menu.setSubmenu(debugMenu, for: debugItem)
+    }
+
+    private func addDebugBackgroundMenu(to menu: NSMenu) {
+        let item = submenuItem(title: "Backgrounds", symbol: "photo")
+        let submenu = NSMenu(title: "Backgrounds")
+        AwayoLockStyle.allCases.forEach { style in
+            let previewItem = menuItem(title: style.title, action: #selector(startDebugBackgroundPreview(_:)))
+            previewItem.representedObject = style.rawValue
+            submenu.addItem(previewItem)
+        }
+        menu.addItem(item)
+        menu.setSubmenu(submenu, for: item)
+    }
+
+    private func addDebugTimerMenu(to menu: NSMenu) {
+        let item = submenuItem(title: "Timers", symbol: "timer")
+        let submenu = NSMenu(title: "Timers")
+        AwayoTimerStyle.allCases.forEach { style in
+            let previewItem = menuItem(title: style.title, action: #selector(startDebugTimerPreview(_:)))
+            previewItem.representedObject = style.rawValue
+            submenu.addItem(previewItem)
+        }
+        menu.addItem(item)
+        menu.setSubmenu(submenu, for: item)
+    }
+
+    private func addDebugDashboardMenu(to menu: NSMenu) {
+        let item = submenuItem(title: "Dashboards", symbol: "rectangle.center.inset.filled")
+        let submenu = NSMenu(title: "Dashboards")
+        AwayoDashboardStyle.allCases.forEach { style in
+            let previewItem = menuItem(title: style.title, action: #selector(startDebugDashboardPreview(_:)))
+            previewItem.representedObject = style.rawValue
+            submenu.addItem(previewItem)
+        }
+        menu.addItem(item)
+        menu.setSubmenu(submenu, for: item)
+    }
+
+    private func addDebugNoteMenu(to menu: NSMenu) {
+        let item = submenuItem(title: "Sticky Notes", symbol: "note.text")
+        let submenu = NSMenu(title: "Sticky Notes")
+        AwayoNoteStyle.allCases.forEach { style in
+            let previewItem = menuItem(title: style.title, action: #selector(startDebugNotePreview(_:)))
+            previewItem.representedObject = style.rawValue
+            submenu.addItem(previewItem)
+        }
+        menu.addItem(item)
+        menu.setSubmenu(submenu, for: item)
     }
 
     @objc private func startKeepAwakeFromMenu(_ sender: NSMenuItem) {
@@ -221,6 +291,86 @@ final class AwayoController: NSObject {
             startLockScreenFromMenu(fakeSender)
         default:
             break
+        }
+    }
+
+    @objc private func startDebugCurrentPreview() {
+        startDebugPreview(label: "current settings", appearance: settingsStore.appearance())
+    }
+
+    @objc private func startDebugBackgroundPreview(_ sender: NSMenuItem) {
+        guard
+            let rawValue = sender.representedObject as? String,
+            let style = AwayoLockStyle(rawValue: rawValue)
+        else {
+            return
+        }
+
+        var appearance = settingsStore.appearance()
+        appearance.backgroundStyle = style
+        startDebugPreview(label: "background: \(style.title)", appearance: appearance)
+    }
+
+    @objc private func startDebugTimerPreview(_ sender: NSMenuItem) {
+        guard
+            let rawValue = sender.representedObject as? String,
+            let style = AwayoTimerStyle(rawValue: rawValue)
+        else {
+            return
+        }
+
+        var appearance = settingsStore.appearance()
+        appearance.timerStyle = style
+        startDebugPreview(label: "timer: \(style.title)", appearance: appearance)
+    }
+
+    @objc private func startDebugDashboardPreview(_ sender: NSMenuItem) {
+        guard
+            let rawValue = sender.representedObject as? String,
+            let style = AwayoDashboardStyle(rawValue: rawValue)
+        else {
+            return
+        }
+
+        var appearance = settingsStore.appearance()
+        appearance.dashboardStyle = style
+        startDebugPreview(label: "dashboard: \(style.title)", appearance: appearance)
+    }
+
+    @objc private func startDebugNotePreview(_ sender: NSMenuItem) {
+        guard
+            let rawValue = sender.representedObject as? String,
+            let style = AwayoNoteStyle(rawValue: rawValue)
+        else {
+            return
+        }
+
+        var appearance = settingsStore.appearance()
+        appearance.noteStyle = style
+        startDebugPreview(label: "sticky notes: \(style.title)", appearance: appearance)
+    }
+
+    private func startDebugPreview(label: String, appearance: AwayoAppearance) {
+        guard ensureAwayoLockPasscodeExists() else {
+            return
+        }
+
+        let duration: TimeInterval = 90
+        let message = "debug preview: \(label)"
+        guard startSession(mode: .privacy, duration: duration, message: message), let session else {
+            return
+        }
+
+        privacyOverlay.show(
+            message: message,
+            endDate: session.endDate,
+            appearance: appearance,
+            showsDebugSampleNotes: true,
+            verifyPasscode: { [passcodeStore] passcode in
+                passcodeStore.verify(passcode)
+            }
+        ) { [weak self] in
+            self?.stopSession()
         }
     }
 
