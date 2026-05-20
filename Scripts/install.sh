@@ -96,7 +96,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd || true)"
+SCRIPT_PATH="${BASH_SOURCE[0]:-}"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" >/dev/null 2>&1 && pwd || true)"
 if [[ -n "$SCRIPT_DIR" && -x "$SCRIPT_DIR/package_app.sh" ]]; then
   WORK_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
   INSTALL_FROM_SOURCE="1"
