@@ -4,7 +4,7 @@ import AppKit
 final class PrivacyOverlayView: NSView {
     let unlockField = NSSecureTextField()
 
-    private let awayoAppearance: AwayoAppearance
+    private var awayoAppearance: AwayoAppearance
     private let badgeLabel = NSTextField(labelWithString: "  AWAYO LOCK  ")
     private let messageLabel = NSTextField(labelWithString: "")
     private let countdownLabel = NSTextField(labelWithString: "")
@@ -18,11 +18,18 @@ final class PrivacyOverlayView: NSView {
     private let noteMessageField = NSTextField(string: "")
     private let noteComposerHost = StickyNoteComposerView()
     private let noteComposer = NSStackView()
+    private let debugPanel = NSStackView()
+    private let debugBackgroundPopup = NSPopUpButton(frame: .zero, pullsDown: false)
+    private let debugTimerPopup = NSPopUpButton(frame: .zero, pullsDown: false)
+    private let debugDashboardPopup = NSPopUpButton(frame: .zero, pullsDown: false)
+    private let debugNotePopup = NSPopUpButton(frame: .zero, pullsDown: false)
     private let verifyPasscode: (String) -> Bool
     private let showsUnlockField: Bool
     private let showsDebugSampleNotes: Bool
     private let onUnlock: () -> Void
 
+    private var contentStack: NSStackView?
+    private var currentEndDate: Date?
     private var animationTimer: Timer?
     private var animationPhase: CGFloat = 0
     private var stickyNotes: [AwayoStickyNote] = []
@@ -72,7 +79,7 @@ final class PrivacyOverlayView: NSView {
             return hitView
         }
 
-        let interactiveViews: [NSView] = [unlockField, unlockButton, notePanel, noteComposerHost]
+        let interactiveViews: [NSView] = [unlockField, unlockButton, notePanel, noteComposerHost, debugPanel]
         if interactiveViews.contains(where: { hitView === $0 || hitView.isDescendant(of: $0) }) {
             return hitView
         }
@@ -102,7 +109,7 @@ final class PrivacyOverlayView: NSView {
         }
 
         let point = convert(event.locationInWindow, from: nil)
-        let ignoredViews: [NSView] = [unlockField, unlockButton, notePanel, noteComposerHost]
+        let ignoredViews: [NSView] = [unlockField, unlockButton, notePanel, noteComposerHost, debugPanel]
         let clickedControl = ignoredViews.contains { view in
             view.convert(view.bounds, to: self).insetBy(dx: -14, dy: -14).contains(point)
         }
@@ -179,6 +186,7 @@ final class PrivacyOverlayView: NSView {
     }
 
     func update(endDate: Date?) {
+        currentEndDate = endDate
         if let endDate {
             let value = DurationFormatter.awayoString(from: max(0, endDate.timeIntervalSinceNow))
             countdownLabel.stringValue = awayoAppearance.timerStyle == .terminalTicker ? "$ \(value)" : value
@@ -191,6 +199,7 @@ final class PrivacyOverlayView: NSView {
 
     private func setupView(message: String, endDate: Date?, showsUnlockField: Bool) {
         let content = NSStackView()
+        contentStack = content
         content.orientation = .vertical
         content.alignment = .centerX
         content.spacing = 14
@@ -251,6 +260,10 @@ final class PrivacyOverlayView: NSView {
 
         if showsUnlockField {
             setupNotePanel()
+        }
+
+        if showsDebugSampleNotes, showsUnlockField {
+            setupDebugPanel()
         }
     }
 
@@ -368,6 +381,168 @@ final class PrivacyOverlayView: NSView {
             notePanel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -32),
             notePanel.widthAnchor.constraint(equalToConstant: 320)
         ])
+    }
+
+    private func setupDebugPanel() {
+        debugPanel.orientation = .vertical
+        debugPanel.alignment = .leading
+        debugPanel.spacing = 8
+        debugPanel.edgeInsets = NSEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
+        debugPanel.translatesAutoresizingMaskIntoConstraints = false
+        debugPanel.wantsLayer = true
+        debugPanel.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.42).cgColor
+        debugPanel.layer?.cornerRadius = 10
+        debugPanel.layer?.borderWidth = 1
+        debugPanel.layer?.borderColor = NSColor.white.withAlphaComponent(0.18).cgColor
+        addSubview(debugPanel)
+
+        let title = NSTextField(labelWithString: "Debug Lab")
+        title.font = .systemFont(ofSize: 13, weight: .heavy)
+        title.textColor = .white
+
+        let subtitle = NSTextField(labelWithString: "Live style tester")
+        subtitle.font = .systemFont(ofSize: 11, weight: .semibold)
+        subtitle.textColor = NSColor.white.withAlphaComponent(0.55)
+
+        debugPanel.addArrangedSubview(title)
+        debugPanel.addArrangedSubview(subtitle)
+        debugPanel.addArrangedSubview(debugRow("Background", popup: debugBackgroundPopup))
+        debugPanel.addArrangedSubview(debugRow("Timer", popup: debugTimerPopup))
+        debugPanel.addArrangedSubview(debugRow("Dashboard", popup: debugDashboardPopup))
+        debugPanel.addArrangedSubview(debugRow("Notes", popup: debugNotePopup))
+
+        configureDebugPopup(
+            debugBackgroundPopup,
+            values: AwayoLockStyle.allCases,
+            selected: awayoAppearance.backgroundStyle,
+            title: { $0.title },
+            action: #selector(debugBackgroundChanged(_:))
+        )
+        configureDebugPopup(
+            debugTimerPopup,
+            values: AwayoTimerStyle.allCases,
+            selected: awayoAppearance.timerStyle,
+            title: { $0.title },
+            action: #selector(debugTimerChanged(_:))
+        )
+        configureDebugPopup(
+            debugDashboardPopup,
+            values: AwayoDashboardStyle.allCases,
+            selected: awayoAppearance.dashboardStyle,
+            title: { $0.title },
+            action: #selector(debugDashboardChanged(_:))
+        )
+        configureDebugPopup(
+            debugNotePopup,
+            values: AwayoNoteStyle.allCases,
+            selected: awayoAppearance.noteStyle,
+            title: { $0.title },
+            action: #selector(debugNoteChanged(_:))
+        )
+
+        NSLayoutConstraint.activate([
+            debugPanel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -22),
+            debugPanel.topAnchor.constraint(equalTo: topAnchor, constant: 22),
+            debugPanel.widthAnchor.constraint(equalToConstant: 260)
+        ])
+    }
+
+    private func debugRow(_ title: String, popup: NSPopUpButton) -> NSStackView {
+        let row = NSStackView()
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 8
+
+        let label = NSTextField(labelWithString: title)
+        label.font = .systemFont(ofSize: 11, weight: .semibold)
+        label.textColor = NSColor.white.withAlphaComponent(0.70)
+        label.widthAnchor.constraint(equalToConstant: 76).isActive = true
+
+        popup.widthAnchor.constraint(equalToConstant: 150).isActive = true
+        row.addArrangedSubview(label)
+        row.addArrangedSubview(popup)
+        return row
+    }
+
+    private func configureDebugPopup<T>(
+        _ popup: NSPopUpButton,
+        values: [T],
+        selected: T,
+        title: (T) -> String,
+        action: Selector
+    ) where T: RawRepresentable & Equatable, T.RawValue == String {
+        popup.removeAllItems()
+        values.forEach { value in
+            popup.addItem(withTitle: title(value))
+            popup.lastItem?.representedObject = value.rawValue
+        }
+        if let selectedIndex = values.firstIndex(of: selected) {
+            popup.selectItem(at: selectedIndex)
+        }
+        popup.target = self
+        popup.action = action
+        popup.controlSize = .small
+        popup.font = .systemFont(ofSize: 11, weight: .semibold)
+    }
+
+    @objc private func debugBackgroundChanged(_ sender: NSPopUpButton) {
+        guard
+            let rawValue = sender.selectedItem?.representedObject as? String,
+            let style = AwayoLockStyle(rawValue: rawValue)
+        else {
+            return
+        }
+
+        awayoAppearance.backgroundStyle = style
+        applyDebugAppearanceChange()
+    }
+
+    @objc private func debugTimerChanged(_ sender: NSPopUpButton) {
+        guard
+            let rawValue = sender.selectedItem?.representedObject as? String,
+            let style = AwayoTimerStyle(rawValue: rawValue)
+        else {
+            return
+        }
+
+        awayoAppearance.timerStyle = style
+        applyDebugAppearanceChange()
+    }
+
+    @objc private func debugDashboardChanged(_ sender: NSPopUpButton) {
+        guard
+            let rawValue = sender.selectedItem?.representedObject as? String,
+            let style = AwayoDashboardStyle(rawValue: rawValue)
+        else {
+            return
+        }
+
+        awayoAppearance.dashboardStyle = style
+        applyDebugAppearanceChange()
+    }
+
+    @objc private func debugNoteChanged(_ sender: NSPopUpButton) {
+        guard
+            let rawValue = sender.selectedItem?.representedObject as? String,
+            let style = AwayoNoteStyle(rawValue: rawValue)
+        else {
+            return
+        }
+
+        awayoAppearance.noteStyle = style
+        applyDebugAppearanceChange()
+    }
+
+    private func applyDebugAppearanceChange() {
+        if let contentStack {
+            applyDashboardStyle(to: contentStack)
+        }
+        applyTimerStyle()
+        update(endDate: currentEndDate)
+        renderStickyNotes()
+        renderFloatingNotes()
+        needsLayout = true
+        needsDisplay = true
     }
 
     private func configureNoteComposer() {
@@ -508,7 +683,11 @@ final class PrivacyOverlayView: NSView {
         floatingNoteViews = stickyNotes.map { note in
             let card = StickyNoteCardView(note: note, style: awayoAppearance.noteStyle, usesConstraints: false)
             card.frameCenterRotation = CGFloat((note.colorIndex % 5) - 2) * 1.8
-            addSubview(card, positioned: .above, relativeTo: nil)
+            if debugPanel.superview == self {
+                addSubview(card, positioned: .below, relativeTo: debugPanel)
+            } else {
+                addSubview(card, positioned: .above, relativeTo: nil)
+            }
             return card
         }
         positionFloatingNotes()
