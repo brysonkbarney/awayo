@@ -14,8 +14,6 @@ final class PrivacyOverlayView: NSView {
     private let unlockButton = NSButton(title: "Unlock", target: nil, action: nil)
     private let safetyExitButton = NSButton(title: "Safety Exit", target: nil, action: nil)
     private let unlockErrorLabel = NSTextField(labelWithString: "")
-    private let agentPanel = NSStackView()
-    private let agentRowsStack = NSStackView()
     private let notePanel = NSStackView()
     private let notesStack = NSStackView()
     private let noteNameField = NSTextField(string: "")
@@ -26,7 +24,6 @@ final class PrivacyOverlayView: NSView {
     private let showsUnlockField: Bool
     private let onUnlock: () -> Void
 
-    private var agentSessions: [AgentSession]
     private var animationTimer: Timer?
     private var animationPhase: CGFloat = 0
     private var stickyNotes: [AwayoStickyNote] = []
@@ -44,14 +41,12 @@ final class PrivacyOverlayView: NSView {
         message: String,
         endDate: Date?,
         appearance: AwayoAppearance,
-        agentSessions: [AgentSession],
         verifyPasscode: @escaping (String) -> Bool,
         showsUnlockField: Bool,
         onUnlock: @escaping () -> Void
     ) {
         self.verifyPasscode = verifyPasscode
         self.awayoAppearance = appearance
-        self.agentSessions = agentSessions
         self.showsUnlockField = showsUnlockField
         self.onUnlock = onUnlock
         super.init(frame: .zero)
@@ -75,7 +70,7 @@ final class PrivacyOverlayView: NSView {
             return hitView
         }
 
-        let interactiveViews: [NSView] = [unlockField, unlockButton, agentPanel, notePanel, noteComposerHost]
+        let interactiveViews: [NSView] = [unlockField, unlockButton, notePanel, noteComposerHost]
         if interactiveViews.contains(where: { hitView === $0 || hitView.isDescendant(of: $0) }) {
             return hitView
         }
@@ -105,7 +100,7 @@ final class PrivacyOverlayView: NSView {
         }
 
         let point = convert(event.locationInWindow, from: nil)
-        let ignoredViews: [NSView] = [unlockField, unlockButton, agentPanel, notePanel, noteComposerHost]
+        let ignoredViews: [NSView] = [unlockField, unlockButton, notePanel, noteComposerHost]
         let clickedControl = ignoredViews.contains { view in
             view.convert(view.bounds, to: self).insetBy(dx: -14, dy: -14).contains(point)
         }
@@ -192,11 +187,6 @@ final class PrivacyOverlayView: NSView {
         }
     }
 
-    func updateAgentSessions(_ sessions: [AgentSession]) {
-        agentSessions = sessions
-        renderAgentSessions()
-    }
-
     private func setupView(message: String, endDate: Date?, showsUnlockField: Bool) {
         let content = NSStackView()
         content.orientation = .vertical
@@ -271,246 +261,7 @@ final class PrivacyOverlayView: NSView {
         ])
 
         if showsUnlockField {
-            setupAgentPanel()
             setupNotePanel()
-        }
-    }
-
-    private func setupAgentPanel() {
-        agentPanel.orientation = .vertical
-        agentPanel.alignment = .leading
-        agentPanel.spacing = 10
-        agentPanel.edgeInsets = NSEdgeInsets(top: 15, left: 16, bottom: 14, right: 16)
-        agentPanel.translatesAutoresizingMaskIntoConstraints = false
-        agentPanel.wantsLayer = true
-        agentPanel.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.25).cgColor
-        agentPanel.layer?.cornerRadius = 10
-        agentPanel.layer?.borderWidth = 1
-        agentPanel.layer?.borderColor = NSColor.white.withAlphaComponent(0.16).cgColor
-        addSubview(agentPanel)
-
-        let titleRow = NSStackView()
-        titleRow.orientation = .horizontal
-        titleRow.alignment = .centerY
-        titleRow.spacing = 8
-
-        let liveDot = NSView()
-        liveDot.translatesAutoresizingMaskIntoConstraints = false
-        liveDot.wantsLayer = true
-        liveDot.layer?.backgroundColor = NSColor(calibratedRed: 0.46, green: 1.0, blue: 0.58, alpha: 0.95).cgColor
-        liveDot.layer?.cornerRadius = 4
-        liveDot.widthAnchor.constraint(equalToConstant: 8).isActive = true
-        liveDot.heightAnchor.constraint(equalToConstant: 8).isActive = true
-
-        let title = NSTextField(labelWithString: "agents alive")
-        title.font = .monospacedSystemFont(ofSize: 13, weight: .heavy)
-        title.textColor = .white
-
-        titleRow.addArrangedSubview(liveDot)
-        titleRow.addArrangedSubview(title)
-
-        let subtitle = NSTextField(labelWithString: "local titles + process hints")
-        subtitle.font = .systemFont(ofSize: 11, weight: .medium)
-        subtitle.textColor = NSColor.white.withAlphaComponent(0.46)
-
-        agentRowsStack.orientation = .vertical
-        agentRowsStack.alignment = .leading
-        agentRowsStack.spacing = 8
-
-        agentPanel.addArrangedSubview(titleRow)
-        agentPanel.addArrangedSubview(subtitle)
-        agentPanel.addArrangedSubview(agentRowsStack)
-        renderAgentSessions()
-
-        NSLayoutConstraint.activate([
-            agentPanel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 32),
-            agentPanel.topAnchor.constraint(equalTo: topAnchor, constant: 32),
-            agentPanel.widthAnchor.constraint(equalToConstant: 310)
-        ])
-    }
-
-    private func renderAgentSessions() {
-        agentRowsStack.arrangedSubviews.forEach {
-            agentRowsStack.removeArrangedSubview($0)
-            $0.removeFromSuperview()
-        }
-
-        guard !agentSessions.isEmpty else {
-            let empty = NSTextField(labelWithString: "looking for obvious sessions")
-            empty.font = .systemFont(ofSize: 12, weight: .semibold)
-            empty.textColor = NSColor.white.withAlphaComponent(0.56)
-            agentRowsStack.addArrangedSubview(empty)
-            return
-        }
-
-        let visibleSessions = agentSessions.prefix(4)
-        visibleSessions.forEach { session in
-            agentRowsStack.addArrangedSubview(agentSessionRow(for: session))
-        }
-
-        let hiddenCount = agentSessions.count - visibleSessions.count
-        if hiddenCount > 0 {
-            let more = NSTextField(labelWithString: "+\(hiddenCount) more still running")
-            more.font = .systemFont(ofSize: 11, weight: .bold)
-            more.textColor = NSColor.white.withAlphaComponent(0.52)
-            agentRowsStack.addArrangedSubview(more)
-        }
-    }
-
-    private func agentSessionRow(for session: AgentSession) -> NSView {
-        let row = NSStackView()
-        row.orientation = .horizontal
-        row.alignment = .centerY
-        row.spacing = 9
-
-        let copy = NSStackView()
-        copy.orientation = .vertical
-        copy.alignment = .leading
-        copy.spacing = 1
-
-        let titleRow = NSStackView()
-        titleRow.orientation = .horizontal
-        titleRow.alignment = .centerY
-        titleRow.spacing = 7
-
-        let name = NSTextField(labelWithString: session.name)
-        name.font = .systemFont(ofSize: 13, weight: .bold)
-        name.textColor = NSColor.white.withAlphaComponent(0.92)
-
-        let state = stateBadge(for: session.state)
-
-        let detail = NSTextField(labelWithString: session.detail)
-        detail.font = .systemFont(ofSize: 12, weight: .medium)
-        detail.textColor = NSColor.white.withAlphaComponent(0.58)
-        detail.lineBreakMode = .byTruncatingMiddle
-        detail.maximumNumberOfLines = 1
-        detail.widthAnchor.constraint(lessThanOrEqualToConstant: 220).isActive = true
-
-        titleRow.addArrangedSubview(name)
-        titleRow.addArrangedSubview(state)
-
-        copy.addArrangedSubview(titleRow)
-        copy.addArrangedSubview(detail)
-
-        row.addArrangedSubview(agentIconView(for: session))
-        row.addArrangedSubview(copy)
-        return row
-    }
-
-    private func agentIconView(for session: AgentSession) -> NSView {
-        let container = NSView()
-        container.translatesAutoresizingMaskIntoConstraints = false
-        container.wantsLayer = true
-        container.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.20).cgColor
-        container.layer?.cornerRadius = 7
-        container.layer?.borderWidth = 1
-        container.layer?.borderColor = NSColor.white.withAlphaComponent(0.14).cgColor
-        container.widthAnchor.constraint(equalToConstant: 24).isActive = true
-        container.heightAnchor.constraint(equalToConstant: 24).isActive = true
-
-        if let icon = agentIcon(for: session.name) {
-            let imageView = NSImageView(image: icon)
-            imageView.translatesAutoresizingMaskIntoConstraints = false
-            imageView.imageScaling = .scaleProportionallyUpOrDown
-            container.addSubview(imageView)
-
-            NSLayoutConstraint.activate([
-                imageView.centerXAnchor.constraint(equalTo: container.centerXAnchor),
-                imageView.centerYAnchor.constraint(equalTo: container.centerYAnchor),
-                imageView.widthAnchor.constraint(equalToConstant: 18),
-                imageView.heightAnchor.constraint(equalToConstant: 18)
-            ])
-        } else {
-            let dot = NSView()
-            dot.translatesAutoresizingMaskIntoConstraints = false
-            dot.wantsLayer = true
-            dot.layer?.backgroundColor = agentColor(for: session.name).cgColor
-            dot.layer?.cornerRadius = 5
-            container.addSubview(dot)
-
-            NSLayoutConstraint.activate([
-                dot.centerXAnchor.constraint(equalTo: container.centerXAnchor),
-                dot.centerYAnchor.constraint(equalTo: container.centerYAnchor),
-                dot.widthAnchor.constraint(equalToConstant: 10),
-                dot.heightAnchor.constraint(equalToConstant: 10)
-            ])
-        }
-
-        return container
-    }
-
-    private func agentIcon(for name: String) -> NSImage? {
-        let appPath: String?
-        switch name {
-        case "Codex":
-            appPath = "/Applications/Codex.app"
-        case "Claude", "Claude Code":
-            appPath = "/Applications/Claude.app"
-        default:
-            appPath = nil
-        }
-
-        guard let appPath, FileManager.default.fileExists(atPath: appPath) else {
-            return nil
-        }
-
-        let image = NSWorkspace.shared.icon(forFile: appPath)
-        image.size = NSSize(width: 18, height: 18)
-        return image
-    }
-
-    private func stateBadge(for state: AgentSession.State) -> NSTextField {
-        let badge = NSTextField(labelWithString: " \(state.label) ")
-        badge.font = .monospacedSystemFont(ofSize: 10, weight: .heavy)
-        badge.alignment = .center
-        badge.textColor = stateTextColor(for: state)
-        badge.wantsLayer = true
-        badge.layer?.backgroundColor = stateColor(for: state).cgColor
-        badge.layer?.cornerRadius = 7
-        badge.layer?.masksToBounds = true
-        return badge
-    }
-
-    private func stateColor(for state: AgentSession.State) -> NSColor {
-        switch state {
-        case .working:
-            NSColor(calibratedRed: 0.47, green: 1.0, blue: 0.62, alpha: 0.86)
-        case .readyForInput:
-            NSColor(calibratedRed: 1.0, green: 0.84, blue: 0.26, alpha: 0.92)
-        case .waiting:
-            NSColor(calibratedRed: 0.55, green: 0.76, blue: 1.0, alpha: 0.78)
-        case .quiet:
-            NSColor.white.withAlphaComponent(0.15)
-        case .alive:
-            NSColor(calibratedRed: 0.66, green: 0.98, blue: 0.82, alpha: 0.42)
-        }
-    }
-
-    private func stateTextColor(for state: AgentSession.State) -> NSColor {
-        switch state {
-        case .working, .readyForInput, .waiting:
-            NSColor.black.withAlphaComponent(0.78)
-        case .quiet, .alive:
-            NSColor.white.withAlphaComponent(0.74)
-        }
-    }
-
-    private func agentColor(for name: String) -> NSColor {
-        switch name {
-        case "Claude Code":
-            NSColor(calibratedRed: 1.0, green: 0.58, blue: 0.32, alpha: 1)
-        case "Codex":
-            NSColor(calibratedRed: 0.44, green: 0.84, blue: 1.0, alpha: 1)
-        case "Aider":
-            NSColor(calibratedRed: 0.78, green: 0.64, blue: 1.0, alpha: 1)
-        case "OpenCode":
-            NSColor(calibratedRed: 0.42, green: 0.94, blue: 0.74, alpha: 1)
-        case "Gemini":
-            NSColor(calibratedRed: 0.98, green: 0.74, blue: 0.34, alpha: 1)
-        case "Goose":
-            NSColor(calibratedRed: 0.72, green: 0.90, blue: 0.42, alpha: 1)
-        default:
-            NSColor.white.withAlphaComponent(0.72)
         }
     }
 

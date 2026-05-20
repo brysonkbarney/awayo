@@ -16,10 +16,7 @@ final class PrivacyOverlayController: NSObject {
     private var configuration: Configuration?
     private var previousPresentationOptions: NSApplication.PresentationOptions?
     private var enforcementTimer: Timer?
-    private var agentSessionTimer: Timer?
     private var localEventMonitor: Any?
-    private var agentSessions: [AgentSession] = []
-    private var isRefreshingAgentSessions = false
 
     override init() {
         super.init()
@@ -77,9 +74,7 @@ final class PrivacyOverlayController: NSObject {
         NSApp.activate(ignoringOtherApps: true)
         startEventGuard()
         startEnforcementTimer()
-        startAgentSessionTimer()
         rebuildWindows()
-        refreshAgentSessions()
     }
 
     func update(endDate: Date?) {
@@ -89,10 +84,8 @@ final class PrivacyOverlayController: NSObject {
     func hide() {
         stopEventGuard()
         stopEnforcementTimer()
-        stopAgentSessionTimer()
         closeWindows()
         configuration = nil
-        agentSessions = []
 
         if let previousPresentationOptions {
             NSApp.presentationOptions = previousPresentationOptions
@@ -149,7 +142,6 @@ final class PrivacyOverlayController: NSObject {
                 message: configuration.message,
                 endDate: configuration.endDate,
                 appearance: configuration.appearance,
-                agentSessions: agentSessions,
                 verifyPasscode: configuration.verifyPasscode,
                 showsUnlockField: isMainDisplay,
                 onUnlock: configuration.onUnlock
@@ -242,49 +234,6 @@ final class PrivacyOverlayController: NSObject {
     private func stopEnforcementTimer() {
         enforcementTimer?.invalidate()
         enforcementTimer = nil
-    }
-
-    private func startAgentSessionTimer() {
-        agentSessionTimer?.invalidate()
-        agentSessionTimer = Timer.scheduledTimer(
-            timeInterval: 6,
-            target: self,
-            selector: #selector(refreshAgentSessions),
-            userInfo: nil,
-            repeats: true
-        )
-    }
-
-    private func stopAgentSessionTimer() {
-        agentSessionTimer?.invalidate()
-        agentSessionTimer = nil
-        isRefreshingAgentSessions = false
-    }
-
-    @objc private func refreshAgentSessions() {
-        guard configuration != nil, !isRefreshingAgentSessions else {
-            return
-        }
-
-        isRefreshingAgentSessions = true
-        let detector = AgentSessionDetector()
-        DispatchQueue.global(qos: .utility).async {
-            let sessions = detector.detect()
-
-            DispatchQueue.main.async { [weak self] in
-                guard let self else {
-                    return
-                }
-
-                self.isRefreshingAgentSessions = false
-                guard self.configuration != nil else {
-                    return
-                }
-
-                self.agentSessions = sessions
-                self.overlayViews.forEach { $0.updateAgentSessions(sessions) }
-            }
-        }
     }
 
     private func startEventGuard() {
