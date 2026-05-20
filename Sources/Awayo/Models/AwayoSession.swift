@@ -50,9 +50,9 @@ enum AwayoLockStyle: String, CaseIterable {
         case .offlineRunner:
             "Offline Runner"
         case .cosmicDesk:
-            "Cosmic Desk"
+            "Solar System"
         case .rainyWindow:
-            "Rainy Window"
+            "Rainy Day"
         case .arcadePulse:
             "Arcade Pulse"
         case .paperNotes:
@@ -79,9 +79,9 @@ enum AwayoLockStyle: String, CaseIterable {
         case .offlineRunner:
             "RUNNING WHILE YOU'RE AWAY"
         case .cosmicDesk:
-            "ORBITING YOUR TASKS"
+            "SOLAR SYSTEM RUNNING"
         case .rainyWindow:
-            "COVERED AND RUNNING"
+            "RAINY DAY, STILL RUNNING"
         case .arcadePulse:
             "INSERT PASSCODE TO RESUME"
         case .paperNotes:

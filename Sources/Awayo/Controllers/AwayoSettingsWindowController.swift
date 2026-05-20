@@ -760,24 +760,38 @@ final class AwayoPreviewTile: NSButton {
         let style = AwayoDashboardStyle(rawValue: rawValue) ?? .centerStage
         switch style {
         case .centerStage:
-            roundedGradient(in: rect, colors: [.systemIndigo, .systemPurple])
-            drawPill(in: NSRect(x: rect.midX - 54, y: rect.maxY - 26, width: 108, height: 13), color: .white.withAlphaComponent(0.34))
-            drawPill(in: rect.insetBy(dx: 30, dy: 26), color: .white.withAlphaComponent(0.86))
-            drawText("AWAY", in: rect.insetBy(dx: 34, dy: 42), font: .systemFont(ofSize: 16, weight: .heavy), color: NSColor.black.withAlphaComponent(0.70))
+            roundedGradient(in: rect, colors: [
+                NSColor(calibratedRed: 0.12, green: 0.11, blue: 0.24, alpha: 1),
+                NSColor(calibratedRed: 0.35, green: 0.18, blue: 0.55, alpha: 1)
+            ])
+            NSColor.white.withAlphaComponent(0.14).setFill()
+            NSBezierPath(ovalIn: NSRect(x: rect.midX - 70, y: rect.minY + 18, width: 140, height: 36)).fill()
+            drawPill(in: NSRect(x: rect.midX - 58, y: rect.midY + 10, width: 116, height: 18), color: NSColor(calibratedRed: 0.98, green: 0.86, blue: 0.30, alpha: 0.94))
+            drawText("AWAYO", in: NSRect(x: rect.midX - 50, y: rect.midY + 10, width: 100, height: 18), font: .monospacedSystemFont(ofSize: 11, weight: .heavy), color: .black)
+            drawText("14m", in: NSRect(x: rect.midX - 42, y: rect.midY - 28, width: 84, height: 30), font: .systemFont(ofSize: 25, weight: .black), color: .white)
         case .paperDesk:
             roundedGradient(in: rect, colors: [
-                NSColor(calibratedRed: 0.42, green: 0.33, blue: 0.22, alpha: 1),
-                NSColor(calibratedRed: 0.19, green: 0.15, blue: 0.12, alpha: 1)
+                NSColor(calibratedRed: 0.48, green: 0.35, blue: 0.22, alpha: 1),
+                NSColor(calibratedRed: 0.24, green: 0.18, blue: 0.13, alpha: 1)
             ])
-            drawPaper(in: rect.insetBy(dx: 22, dy: 15), color: NSColor(calibratedRed: 1.0, green: 0.93, blue: 0.66, alpha: 1))
-            drawText("back soon", in: rect.insetBy(dx: 36, dy: 40), font: handwrittenFont(size: 18, weight: .bold), color: NSColor(calibratedRed: 0.22, green: 0.15, blue: 0.09, alpha: 1))
+            let paper = rect.insetBy(dx: 34, dy: 12)
+            drawPaper(in: paper, color: NSColor(calibratedRed: 1.0, green: 0.91, blue: 0.58, alpha: 1))
+            drawPill(in: NSRect(x: paper.midX - 26, y: paper.maxY - 8, width: 52, height: 12), color: .white.withAlphaComponent(0.65))
+            drawText("brb", in: NSRect(x: paper.minX + 14, y: paper.midY - 4, width: paper.width - 28, height: 26), font: handwrittenFont(size: 24, weight: .bold), color: NSColor(calibratedRed: 0.24, green: 0.15, blue: 0.08, alpha: 1))
+            NSColor(calibratedRed: 0.52, green: 0.34, blue: 0.16, alpha: 0.55).setStroke()
+            let pencil = NSBezierPath()
+            pencil.move(to: NSPoint(x: paper.maxX - 48, y: paper.minY + 18))
+            pencil.line(to: NSPoint(x: paper.maxX - 12, y: paper.minY + 30))
+            pencil.lineWidth = 5
+            pencil.stroke()
         case .minimalBadge:
             roundedGradient(in: rect, colors: [
-                NSColor(calibratedRed: 0.08, green: 0.09, blue: 0.12, alpha: 1),
-                NSColor(calibratedRed: 0.02, green: 0.03, blue: 0.04, alpha: 1)
+                NSColor(calibratedRed: 0.02, green: 0.03, blue: 0.04, alpha: 1),
+                NSColor(calibratedRed: 0.07, green: 0.08, blue: 0.10, alpha: 1)
             ])
-            drawPill(in: NSRect(x: rect.midX - 46, y: rect.midY - 15, width: 92, height: 30), color: .white.withAlphaComponent(0.88))
-            drawText("ON", in: NSRect(x: rect.midX - 30, y: rect.midY - 9, width: 60, height: 18), font: .systemFont(ofSize: 13, weight: .black), color: .black)
+            drawPill(in: NSRect(x: rect.midX - 38, y: rect.midY - 10, width: 76, height: 20), color: .white.withAlphaComponent(0.92))
+            drawText("away", in: NSRect(x: rect.midX - 31, y: rect.midY - 7, width: 62, height: 16), font: .systemFont(ofSize: 11, weight: .bold), color: .black)
+            drawPill(in: NSRect(x: rect.midX - 52, y: rect.midY - 34, width: 104, height: 6), color: .white.withAlphaComponent(0.18))
         case .commandCenter:
             roundedGradient(in: rect, colors: [
                 NSColor(calibratedRed: 0.02, green: 0.09, blue: 0.14, alpha: 1),
@@ -786,6 +800,8 @@ final class AwayoPreviewTile: NSButton {
             let panel = rect.insetBy(dx: 14, dy: 14)
             drawPill(in: panel, color: .black.withAlphaComponent(0.48))
             strokePill(in: panel, color: NSColor(calibratedRed: 0.2, green: 0.82, blue: 0.9, alpha: 0.30))
+            drawTinyStatusDots(in: panel)
+            drawText("$ alive", in: panel.insetBy(dx: 18, dy: 28), font: .monospacedSystemFont(ofSize: 20, weight: .bold), color: NSColor(calibratedRed: 0.47, green: 1.0, blue: 0.63, alpha: 1), alignment: .left)
             drawHudLines(in: panel)
         }
     }
@@ -859,28 +875,37 @@ final class AwayoPreviewTile: NSButton {
 
     private func drawMiniCosmicDesk(in rect: NSRect) {
         roundedGradient(in: rect, colors: [
-            NSColor(calibratedRed: 0.02, green: 0.02, blue: 0.09, alpha: 1),
-            NSColor(calibratedRed: 0.15, green: 0.06, blue: 0.28, alpha: 1),
-            NSColor(calibratedRed: 0.00, green: 0.18, blue: 0.23, alpha: 1)
+            NSColor(calibratedRed: 0.01, green: 0.01, blue: 0.05, alpha: 1),
+            NSColor(calibratedRed: 0.09, green: 0.03, blue: 0.18, alpha: 1),
+            NSColor(calibratedRed: 0.00, green: 0.09, blue: 0.15, alpha: 1)
         ])
-        drawStars(in: rect, count: 40)
-        let planet = NSRect(x: rect.maxX - 72, y: rect.maxY - 68, width: 48, height: 48)
-        NSColor(calibratedRed: 0.94, green: 0.42, blue: 0.35, alpha: 0.88).setFill()
-        NSBezierPath(ovalIn: planet).fill()
-        NSColor(calibratedRed: 0.57, green: 0.90, blue: 0.93, alpha: 0.42).setStroke()
-        let ring = NSBezierPath(ovalIn: planet.insetBy(dx: -20, dy: 15))
-        ring.lineWidth = 4
-        ring.stroke()
+        drawStars(in: rect, count: 44)
+        let center = NSPoint(x: rect.midX, y: rect.midY)
+        NSColor(calibratedRed: 1.0, green: 0.78, blue: 0.22, alpha: 1).setFill()
+        NSBezierPath(ovalIn: NSRect(x: center.x - 20, y: center.y - 20, width: 40, height: 40)).fill()
+        let colors: [NSColor] = [.systemGray, .systemOrange, .systemBlue, .systemRed, .systemBrown, .systemYellow, .systemCyan]
+        for index in 0..<7 {
+            let orbitX = CGFloat(34 + index * 18)
+            let orbitY = CGFloat(17 + index * 10)
+            NSColor.white.withAlphaComponent(0.10).setStroke()
+            NSBezierPath(ovalIn: NSRect(x: center.x - orbitX, y: center.y - orbitY, width: orbitX * 2, height: orbitY * 2)).stroke()
+            let angle = CGFloat(index) * 0.82 + 0.4
+            let size = CGFloat(7 + index % 3 * 3)
+            let point = NSPoint(x: center.x + cos(angle) * orbitX, y: center.y + sin(angle) * orbitY)
+            colors[index].setFill()
+            NSBezierPath(ovalIn: NSRect(x: point.x - size / 2, y: point.y - size / 2, width: size, height: size)).fill()
+        }
     }
 
     private func drawMiniRainyWindow(in rect: NSRect) {
         roundedGradient(in: rect, colors: [
-            NSColor(calibratedRed: 0.04, green: 0.06, blue: 0.08, alpha: 1),
-            NSColor(calibratedRed: 0.12, green: 0.18, blue: 0.22, alpha: 1)
+            NSColor(calibratedRed: 0.48, green: 0.58, blue: 0.65, alpha: 1),
+            NSColor(calibratedRed: 0.14, green: 0.28, blue: 0.33, alpha: 1)
         ])
-        let window = rect.insetBy(dx: 28, dy: 16)
-        drawPill(in: window, color: .white.withAlphaComponent(0.08))
-        strokePill(in: window, color: .white.withAlphaComponent(0.18))
+        NSColor(calibratedRed: 0.08, green: 0.22, blue: 0.18, alpha: 0.70).setFill()
+        NSBezierPath(rect: NSRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height * 0.22)).fill()
+        drawPill(in: NSRect(x: rect.minX + 24, y: rect.maxY - 38, width: 82, height: 18), color: .white.withAlphaComponent(0.24))
+        drawPill(in: NSRect(x: rect.minX + 74, y: rect.maxY - 46, width: 116, height: 22), color: .white.withAlphaComponent(0.20))
         for index in 0..<18 {
             let x = rect.minX + CGFloat(index) * rect.width / 18
             let path = NSBezierPath()

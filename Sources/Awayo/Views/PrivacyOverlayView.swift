@@ -538,6 +538,9 @@ final class PrivacyOverlayView: NSView {
             applyDashboardStyle(to: contentStack)
         }
         applyTimerStyle()
+        let compact = bounds.width < 760
+        messageLabel.font = messageFont(compact: compact)
+        countdownLabel.font = timerFont(compact: compact)
         update(endDate: currentEndDate)
         renderStickyNotes()
         renderFloatingNotes()
@@ -739,19 +742,49 @@ final class PrivacyOverlayView: NSView {
         content.wantsLayer = true
         content.layer?.backgroundColor = NSColor.clear.cgColor
         content.layer?.borderWidth = 0
+        content.layer?.borderColor = NSColor.clear.cgColor
         content.layer?.cornerRadius = 8
         content.spacing = 14
+        badgeLabel.isHidden = false
+        backAtLabel.isHidden = false
+        badgeLabel.stringValue = "  AWAYO LOCK  "
+        badgeLabel.textColor = NSColor.black.withAlphaComponent(0.82)
+        badgeLabel.layer?.backgroundColor = NSColor(calibratedRed: 0.98, green: 0.88, blue: 0.33, alpha: 0.92).cgColor
+        messageLabel.alignment = .center
+        countdownLabel.alignment = .center
+        backAtLabel.alignment = .center
+        backAtLabel.textColor = NSColor.white.withAlphaComponent(0.76)
 
         switch awayoAppearance.dashboardStyle {
         case .centerStage:
             messageLabel.textColor = .white
         case .paperDesk:
-            messageLabel.textColor = NSColor(calibratedRed: 1.0, green: 0.97, blue: 0.84, alpha: 1)
+            content.edgeInsets = NSEdgeInsets(top: 26, left: 34, bottom: 26, right: 34)
+            content.layer?.backgroundColor = NSColor(calibratedRed: 1.0, green: 0.91, blue: 0.60, alpha: 0.88).cgColor
+            content.layer?.borderWidth = 1
+            content.layer?.borderColor = NSColor(calibratedRed: 0.38, green: 0.27, blue: 0.14, alpha: 0.24).cgColor
+            content.layer?.cornerRadius = 10
+            badgeLabel.stringValue = "  TAPED NOTE  "
+            badgeLabel.textColor = NSColor(calibratedRed: 0.26, green: 0.18, blue: 0.10, alpha: 0.88)
+            badgeLabel.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.54).cgColor
+            messageLabel.textColor = NSColor(calibratedRed: 0.24, green: 0.16, blue: 0.08, alpha: 1)
+            backAtLabel.textColor = NSColor(calibratedRed: 0.30, green: 0.21, blue: 0.12, alpha: 0.74)
         case .minimalBadge:
-            content.spacing = 10
+            content.spacing = 7
+            badgeLabel.isHidden = true
+            backAtLabel.isHidden = true
             messageLabel.textColor = .white
         case .commandCenter:
-            messageLabel.textColor = .white
+            content.edgeInsets = NSEdgeInsets(top: 24, left: 30, bottom: 24, right: 30)
+            content.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.54).cgColor
+            content.layer?.borderWidth = 1
+            content.layer?.borderColor = NSColor(calibratedRed: 0.14, green: 0.88, blue: 0.94, alpha: 0.34).cgColor
+            content.layer?.cornerRadius = 12
+            badgeLabel.stringValue = "  COMMAND CENTER  "
+            badgeLabel.textColor = NSColor(calibratedRed: 0.48, green: 1.0, blue: 0.66, alpha: 1)
+            badgeLabel.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.56).cgColor
+            messageLabel.textColor = NSColor(calibratedRed: 0.82, green: 0.96, blue: 1.0, alpha: 1)
+            backAtLabel.textColor = NSColor(calibratedRed: 0.48, green: 1.0, blue: 0.66, alpha: 0.72)
         }
     }
 
@@ -763,7 +796,9 @@ final class PrivacyOverlayView: NSView {
 
         switch awayoAppearance.timerStyle {
         case .heroCountdown:
-            countdownLabel.textColor = .white
+            countdownLabel.textColor = awayoAppearance.dashboardStyle == .paperDesk
+                ? NSColor(calibratedRed: 0.24, green: 0.16, blue: 0.08, alpha: 1)
+                : .white
             countdownLabel.layer?.backgroundColor = NSColor.clear.cgColor
         case .paperClock:
             countdownLabel.layer?.cornerRadius = 10
@@ -789,11 +824,11 @@ final class PrivacyOverlayView: NSView {
         case .centerStage:
             .systemFont(ofSize: compact ? 30 : 46, weight: .heavy)
         case .paperDesk:
-            .systemFont(ofSize: compact ? 30 : 42, weight: .heavy)
+            handwrittenFont(size: compact ? 30 : 42, weight: .bold)
         case .minimalBadge:
-            .systemFont(ofSize: compact ? 26 : 38, weight: .bold)
+            .systemFont(ofSize: compact ? 24 : 32, weight: .semibold)
         case .commandCenter:
-            .systemFont(ofSize: compact ? 30 : 44, weight: .heavy)
+            .monospacedSystemFont(ofSize: compact ? 26 : 38, weight: .bold)
         }
     }
 
@@ -941,24 +976,24 @@ final class PrivacyOverlayView: NSView {
 
     private func drawCosmicDesk(in rect: NSRect) {
         drawGradient(in: rect, colors: [
-            NSColor(calibratedRed: 0.02, green: 0.02, blue: 0.09, alpha: 1),
-            NSColor(calibratedRed: 0.10, green: 0.04, blue: 0.20, alpha: 1),
-            NSColor(calibratedRed: 0.01, green: 0.10, blue: 0.18, alpha: 1)
+            NSColor(calibratedRed: 0.01, green: 0.01, blue: 0.05, alpha: 1),
+            NSColor(calibratedRed: 0.06, green: 0.02, blue: 0.16, alpha: 1),
+            NSColor(calibratedRed: 0.00, green: 0.08, blue: 0.14, alpha: 1)
         ], angle: 18)
         drawStars(in: rect)
-        drawPlanets(in: rect)
-        drawOrbitLines(in: rect)
+        drawSolarSystem(in: rect)
     }
 
     private func drawRainyWindow(in rect: NSRect) {
         drawGradient(in: rect, colors: [
-            NSColor(calibratedRed: 0.06, green: 0.09, blue: 0.13, alpha: 1),
-            NSColor(calibratedRed: 0.13, green: 0.19, blue: 0.24, alpha: 1),
-            NSColor(calibratedRed: 0.04, green: 0.05, blue: 0.08, alpha: 1)
+            NSColor(calibratedRed: 0.47, green: 0.57, blue: 0.64, alpha: 1),
+            NSColor(calibratedRed: 0.28, green: 0.41, blue: 0.48, alpha: 1),
+            NSColor(calibratedRed: 0.09, green: 0.19, blue: 0.23, alpha: 1)
         ], angle: -90)
-        drawWindow(in: rect)
+        drawRainyHorizon(in: rect)
+        drawRainClouds(in: rect)
         drawRain(in: rect)
-        drawLampGlow(in: rect)
+        drawPuddles(in: rect)
     }
 
     private func drawArcadePulse(in rect: NSRect) {
@@ -1317,34 +1352,116 @@ final class PrivacyOverlayView: NSView {
         }
     }
 
-    private func drawPlanets(in rect: NSRect) {
-        let planet = NSRect(x: rect.width * 0.72, y: rect.height * 0.62, width: 180, height: 180)
-        NSColor(calibratedRed: 0.93, green: 0.46, blue: 0.38, alpha: 0.75).setFill()
-        NSBezierPath(ovalIn: planet).fill()
-        NSColor(calibratedRed: 0.48, green: 0.82, blue: 0.88, alpha: 0.38).setStroke()
-        let ring = NSBezierPath(ovalIn: planet.insetBy(dx: -54, dy: 56))
-        ring.lineWidth = 8
-        ring.stroke()
-    }
+    private func drawSolarSystem(in rect: NSRect) {
+        let center = NSPoint(x: rect.midX, y: rect.midY)
+        let sunSize = min(rect.width, rect.height) * 0.14
+        let planets: [(orbitX: CGFloat, orbitY: CGFloat, size: CGFloat, speed: CGFloat, color: NSColor)] = [
+            (0.11, 0.07, 0.018, 2.4, NSColor(calibratedRed: 0.74, green: 0.68, blue: 0.58, alpha: 1)),
+            (0.16, 0.10, 0.024, 1.9, NSColor(calibratedRed: 0.94, green: 0.72, blue: 0.42, alpha: 1)),
+            (0.22, 0.14, 0.026, 1.45, NSColor(calibratedRed: 0.20, green: 0.55, blue: 0.92, alpha: 1)),
+            (0.28, 0.18, 0.022, 1.13, NSColor(calibratedRed: 0.88, green: 0.32, blue: 0.24, alpha: 1)),
+            (0.36, 0.23, 0.056, 0.82, NSColor(calibratedRed: 0.90, green: 0.66, blue: 0.42, alpha: 1)),
+            (0.45, 0.29, 0.050, 0.62, NSColor(calibratedRed: 0.86, green: 0.74, blue: 0.50, alpha: 1)),
+            (0.52, 0.34, 0.036, 0.46, NSColor(calibratedRed: 0.48, green: 0.84, blue: 0.86, alpha: 1)),
+            (0.59, 0.38, 0.034, 0.34, NSColor(calibratedRed: 0.34, green: 0.44, blue: 0.86, alpha: 1))
+        ]
 
-    private func drawOrbitLines(in rect: NSRect) {
-        for index in 0..<4 {
-            let orbit = NSRect(x: rect.midX - CGFloat(220 + index * 80), y: rect.midY - CGFloat(120 + index * 42), width: CGFloat(440 + index * 160), height: CGFloat(240 + index * 84))
-            NSColor.white.withAlphaComponent(0.06).setStroke()
+        for planet in planets {
+            let orbit = NSRect(
+                x: center.x - rect.width * planet.orbitX,
+                y: center.y - rect.height * planet.orbitY,
+                width: rect.width * planet.orbitX * 2,
+                height: rect.height * planet.orbitY * 2
+            )
+            NSColor.white.withAlphaComponent(0.065).setStroke()
             let path = NSBezierPath(ovalIn: orbit)
-            path.lineWidth = 1.4
+            path.lineWidth = 1.2
             path.stroke()
+        }
+
+        drawSun(at: center, size: sunSize)
+
+        for (index, planet) in planets.enumerated() {
+            let phase = animationPhase * planet.speed + CGFloat(index) * 0.78
+            let point = NSPoint(
+                x: center.x + cos(phase) * rect.width * planet.orbitX,
+                y: center.y + sin(phase) * rect.height * planet.orbitY
+            )
+            let size = min(rect.width, rect.height) * planet.size
+            drawSolarPlanet(at: point, size: size, color: planet.color, hasRing: index == 5)
         }
     }
 
-    private func drawWindow(in rect: NSRect) {
-        let window = NSRect(x: rect.width * 0.10, y: rect.height * 0.26, width: rect.width * 0.80, height: rect.height * 0.58)
-        NSColor.white.withAlphaComponent(0.09).setFill()
-        NSBezierPath(roundedRect: window, xRadius: 28, yRadius: 28).fill()
-        NSColor.white.withAlphaComponent(0.14).setStroke()
-        let path = NSBezierPath(roundedRect: window, xRadius: 28, yRadius: 28)
-        path.lineWidth = 2
-        path.stroke()
+    private func drawSun(at point: NSPoint, size: CGFloat) {
+        for index in (0..<4).reversed() {
+            let glow = size + CGFloat(index) * size * 0.45
+            NSColor(calibratedRed: 1.0, green: 0.68, blue: 0.14, alpha: 0.06 + CGFloat(3 - index) * 0.025).setFill()
+            NSBezierPath(ovalIn: NSRect(x: point.x - glow / 2, y: point.y - glow / 2, width: glow, height: glow)).fill()
+        }
+        NSColor(calibratedRed: 1.0, green: 0.78, blue: 0.24, alpha: 1).setFill()
+        NSBezierPath(ovalIn: NSRect(x: point.x - size / 2, y: point.y - size / 2, width: size, height: size)).fill()
+        NSColor(calibratedRed: 1.0, green: 0.95, blue: 0.54, alpha: 0.85).setFill()
+        NSBezierPath(ovalIn: NSRect(x: point.x - size * 0.18, y: point.y + size * 0.06, width: size * 0.24, height: size * 0.24)).fill()
+    }
+
+    private func drawSolarPlanet(at point: NSPoint, size: CGFloat, color: NSColor, hasRing: Bool) {
+        if hasRing {
+            NSColor(calibratedRed: 0.92, green: 0.82, blue: 0.58, alpha: 0.50).setStroke()
+            let ring = NSBezierPath(ovalIn: NSRect(x: point.x - size * 1.15, y: point.y - size * 0.30, width: size * 2.30, height: size * 0.60))
+            ring.lineWidth = max(2, size * 0.12)
+            ring.stroke()
+        }
+
+        color.setFill()
+        NSBezierPath(ovalIn: NSRect(x: point.x - size / 2, y: point.y - size / 2, width: size, height: size)).fill()
+        NSColor.white.withAlphaComponent(0.28).setFill()
+        NSBezierPath(ovalIn: NSRect(x: point.x - size * 0.18, y: point.y + size * 0.06, width: size * 0.22, height: size * 0.22)).fill()
+    }
+
+    private func drawRainyHorizon(in rect: NSRect) {
+        let groundY = rect.height * 0.22
+        NSColor(calibratedRed: 0.07, green: 0.18, blue: 0.16, alpha: 0.70).setFill()
+        NSBezierPath(rect: NSRect(x: rect.minX, y: rect.minY, width: rect.width, height: groundY)).fill()
+
+        let hills = NSBezierPath()
+        hills.move(to: NSPoint(x: rect.minX, y: groundY))
+        stride(from: rect.minX, through: rect.maxX + 90, by: 90).forEach { x in
+            let crest = groundY + rect.height * (0.04 + unitNoise(x * 0.013) * 0.07)
+            hills.curve(to: NSPoint(x: x + 90, y: groundY), controlPoint1: NSPoint(x: x + 26, y: crest), controlPoint2: NSPoint(x: x + 58, y: crest))
+        }
+        hills.line(to: NSPoint(x: rect.maxX, y: rect.minY))
+        hills.line(to: NSPoint(x: rect.minX, y: rect.minY))
+        hills.close()
+        NSColor(calibratedRed: 0.10, green: 0.27, blue: 0.23, alpha: 0.82).setFill()
+        hills.fill()
+    }
+
+    private func drawRainClouds(in rect: NSRect) {
+        for index in 0..<5 {
+            let width = rect.width * (0.20 + CGFloat(index % 2) * 0.08)
+            let height = rect.height * 0.09
+            let x = rect.width * unitNoise(CGFloat(index) * 19.4) - width * 0.18 + sin(animationPhase * 0.32 + CGFloat(index)) * 18
+            let y = rect.height * (0.72 + unitNoise(CGFloat(index) * 7.9) * 0.18)
+            drawCloud(in: NSRect(x: x, y: y, width: width, height: height), alpha: 0.24 + CGFloat(index % 2) * 0.08)
+        }
+    }
+
+    private func drawCloud(in rect: NSRect, alpha: CGFloat) {
+        NSColor(calibratedRed: 0.78, green: 0.85, blue: 0.88, alpha: alpha).setFill()
+        NSBezierPath(roundedRect: NSRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height * 0.58), xRadius: rect.height * 0.28, yRadius: rect.height * 0.28).fill()
+        NSBezierPath(ovalIn: NSRect(x: rect.minX + rect.width * 0.14, y: rect.minY + rect.height * 0.18, width: rect.width * 0.26, height: rect.height * 0.74)).fill()
+        NSBezierPath(ovalIn: NSRect(x: rect.minX + rect.width * 0.34, y: rect.minY + rect.height * 0.10, width: rect.width * 0.30, height: rect.height * 0.84)).fill()
+        NSBezierPath(ovalIn: NSRect(x: rect.minX + rect.width * 0.58, y: rect.minY + rect.height * 0.18, width: rect.width * 0.24, height: rect.height * 0.68)).fill()
+    }
+
+    private func drawPuddles(in rect: NSRect) {
+        for index in 0..<5 {
+            let width = rect.width * (0.10 + CGFloat(index % 3) * 0.035)
+            let x = rect.width * unitNoise(CGFloat(index) * 23.1)
+            let y = rect.height * (0.05 + unitNoise(CGFloat(index) * 9.3) * 0.13)
+            NSColor(calibratedRed: 0.55, green: 0.76, blue: 0.82, alpha: 0.20).setFill()
+            NSBezierPath(ovalIn: NSRect(x: x, y: y, width: width, height: width * 0.16)).fill()
+        }
     }
 
     private func drawRain(in rect: NSRect) {
@@ -1358,12 +1475,6 @@ final class PrivacyOverlayView: NSView {
             NSColor.white.withAlphaComponent(0.22).setStroke()
             path.stroke()
         }
-    }
-
-    private func drawLampGlow(in rect: NSRect) {
-        let glow = NSBezierPath(ovalIn: NSRect(x: rect.width * 0.70, y: rect.height * 0.20, width: 260, height: 260))
-        NSColor(calibratedRed: 1.00, green: 0.76, blue: 0.32, alpha: 0.12).setFill()
-        glow.fill()
     }
 
     private func drawArcadeGrid(in rect: NSRect) {
