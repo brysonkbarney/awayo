@@ -26,8 +26,8 @@ Current Awayo Lock styles:
 - Neon Flow
 - Duck Pond
 - Offline Runner
-- Cosmic Desk
-- Rainy Window
+- Solar System
+- Rainy Day
 - Arcade Pulse
 - Paper Notes
 - Synthwave
@@ -35,6 +35,30 @@ Current Awayo Lock styles:
 - Soft Wash
 - Stripes
 - Polka Dots
+
+## Install
+
+Run this on macOS:
+
+```sh
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/brysonkbarney/awayo/main/Scripts/install.sh)"
+```
+
+The installer builds Awayo locally, installs it to `~/Applications/Awayo.app`, and opens it.
+
+To install somewhere else:
+
+```sh
+AWAYO_INSTALL_DIR=/Applications /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/brysonkbarney/awayo/main/Scripts/install.sh)"
+```
+
+Installing to `/Applications` may require admin permissions. The default `~/Applications` install does not.
+
+For now, the installer requires `git` and the Swift toolchain from Xcode Command Line Tools:
+
+```sh
+xcode-select --install
+```
 
 ## Run Locally
 
@@ -54,6 +78,12 @@ Scripts/open_app.sh
 ```
 
 The packaging script builds a release binary, creates `dist/Awayo.app`, and ad-hoc signs it for local testing.
+
+To install the packaged app into `~/Applications`:
+
+```sh
+Scripts/install.sh
+```
 
 For a full launch smoke test:
 
