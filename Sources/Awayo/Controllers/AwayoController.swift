@@ -330,7 +330,7 @@ final class AwayoController: NSObject {
 
         let alert = NSAlert()
         alert.messageText = "Start Awayo Lock"
-        alert.informativeText = "Keep your Mac awake behind Awayo Lock. Choose the note people will see while your agents keep running."
+        alert.informativeText = "Keep your Mac awake behind Awayo Lock. Choose the note people will see while your work keeps running."
         alert.alertStyle = .informational
 
         let stack = NSStackView()
@@ -385,13 +385,8 @@ final class AwayoController: NSObject {
         return label
     }
 
-    private func defaultPrivacyMessage(duration: TimeInterval?) -> String {
-        guard let duration else {
-            return "brb, agents are running"
-        }
-
-        let backAt = Date().addingTimeInterval(duration).formatted(date: .omitted, time: .shortened)
-        return "brb, agents are running. Back around \(backAt)."
+    private func defaultPrivacyMessage(duration _: TimeInterval?) -> String {
+        "brb, agents are running"
     }
 
     private func remainingLabel(for session: AwayoSession) -> String {

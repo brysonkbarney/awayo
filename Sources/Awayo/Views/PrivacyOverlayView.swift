@@ -6,11 +6,9 @@ final class PrivacyOverlayView: NSView {
 
     private let awayoAppearance: AwayoAppearance
     private let badgeLabel = NSTextField(labelWithString: "  AWAYO LOCK  ")
-    private let statusLabel = NSTextField(labelWithString: "")
     private let messageLabel = NSTextField(labelWithString: "")
     private let countdownLabel = NSTextField(labelWithString: "")
     private let backAtLabel = NSTextField(labelWithString: "")
-    private let activityLabel = NSTextField(labelWithString: "")
     private let unlockButton = NSButton(title: "Unlock", target: nil, action: nil)
     private let safetyExitButton = NSButton(title: "Safety Exit", target: nil, action: nil)
     private let unlockErrorLabel = NSTextField(labelWithString: "")
@@ -138,12 +136,11 @@ final class PrivacyOverlayView: NSView {
         super.layout()
 
         let availableWidth = max(300, bounds.width - 96)
-        let noteAwareWidth = showsUnlockField && bounds.width > 1200 ? min(900, availableWidth - 340) : min(960, availableWidth)
-        messageLabel.preferredMaxLayoutWidth = max(360, noteAwareWidth)
+        let noteAwareWidth = showsUnlockField && bounds.width > 1200 ? min(760, availableWidth - 360) : min(760, availableWidth)
+        messageLabel.preferredMaxLayoutWidth = max(320, noteAwareWidth)
         messageLabel.font = messageFont(compact: bounds.width < 760)
         countdownLabel.font = timerFont(compact: bounds.width < 760)
-        backAtLabel.font = .systemFont(ofSize: bounds.width < 760 ? 16 : 20, weight: .semibold)
-        activityLabel.font = .systemFont(ofSize: bounds.width < 760 ? 14 : 16, weight: .medium)
+        backAtLabel.font = .systemFont(ofSize: bounds.width < 760 ? 14 : 18, weight: .semibold)
         positionFloatingNotes()
     }
 
@@ -180,7 +177,7 @@ final class PrivacyOverlayView: NSView {
         if let endDate {
             let value = DurationFormatter.awayoString(from: max(0, endDate.timeIntervalSinceNow))
             countdownLabel.stringValue = awayoAppearance.timerStyle == .terminalTicker ? "$ \(value)" : value
-            backAtLabel.stringValue = "Back around \(endDate.formatted(date: .omitted, time: .shortened))"
+            backAtLabel.stringValue = "until \(endDate.formatted(date: .omitted, time: .shortened))"
         } else {
             countdownLabel.stringValue = awayoAppearance.timerStyle == .terminalTicker ? "$ running" : "Running"
             backAtLabel.stringValue = "Until stopped"
@@ -191,7 +188,7 @@ final class PrivacyOverlayView: NSView {
         let content = NSStackView()
         content.orientation = .vertical
         content.alignment = .centerX
-        content.spacing = 18
+        content.spacing = 14
         content.translatesAutoresizingMaskIntoConstraints = false
         addSubview(content)
 
@@ -200,17 +197,18 @@ final class PrivacyOverlayView: NSView {
         topRow.alignment = .centerY
         topRow.spacing = 10
 
-        statusLabel.stringValue = "  \(style.statusText)  "
-        configurePillLabel(badgeLabel, foreground: .black, background: NSColor(calibratedRed: 0.98, green: 0.88, blue: 0.33, alpha: 1))
-        configurePillLabel(statusLabel, foreground: .white, background: NSColor.white.withAlphaComponent(0.14))
+        configurePillLabel(
+            badgeLabel,
+            foreground: NSColor.black.withAlphaComponent(0.82),
+            background: NSColor(calibratedRed: 0.98, green: 0.88, blue: 0.33, alpha: 0.92)
+        )
 
         topRow.addArrangedSubview(badgeLabel)
-        topRow.addArrangedSubview(statusLabel)
 
-        messageLabel.stringValue = message
+        messageLabel.stringValue = displayMessage(from: message)
         messageLabel.textColor = .white
         messageLabel.alignment = .center
-        messageLabel.maximumNumberOfLines = 4
+        messageLabel.maximumNumberOfLines = 3
         messageLabel.lineBreakMode = .byWordWrapping
         messageLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
@@ -221,12 +219,6 @@ final class PrivacyOverlayView: NSView {
         backAtLabel.textColor = NSColor.white.withAlphaComponent(0.76)
         backAtLabel.alignment = .center
 
-        activityLabel.stringValue = activityText(for: style)
-        activityLabel.textColor = NSColor.white.withAlphaComponent(0.62)
-        activityLabel.alignment = .center
-        activityLabel.maximumNumberOfLines = 2
-        activityLabel.preferredMaxLayoutWidth = 640
-
         update(endDate: endDate)
         applyDashboardStyle(to: content)
         applyTimerStyle()
@@ -235,7 +227,6 @@ final class PrivacyOverlayView: NSView {
         content.addArrangedSubview(messageLabel)
         content.addArrangedSubview(countdownLabel)
         content.addArrangedSubview(backAtLabel)
-        content.addArrangedSubview(activityLabel)
 
         if showsUnlockField {
             content.addArrangedSubview(makeUnlockRow())
@@ -245,13 +236,6 @@ final class PrivacyOverlayView: NSView {
             hint.textColor = NSColor.white.withAlphaComponent(0.58)
             content.addArrangedSubview(hint)
         }
-
-        let footer = NSTextField(labelWithString: style.title)
-        footer.font = .systemFont(ofSize: 13, weight: .bold)
-        footer.textColor = NSColor.white.withAlphaComponent(0.38)
-        footer.alignment = .center
-        footer.maximumNumberOfLines = 1
-        content.addArrangedSubview(footer)
 
         NSLayoutConstraint.activate([
             content.centerXAnchor.constraint(equalTo: centerXAnchor),
@@ -265,21 +249,31 @@ final class PrivacyOverlayView: NSView {
         }
     }
 
+    private func displayMessage(from message: String) -> String {
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        let markers = [". Back around ", " Back around ", ". back around ", " back around "]
+
+        for marker in markers {
+            if let range = trimmed.range(of: marker) {
+                return String(trimmed[..<range.lowerBound])
+                    .trimmingCharacters(in: CharacterSet(charactersIn: ". \n\t"))
+            }
+        }
+
+        return trimmed
+    }
+
     private func makeUnlockRow() -> NSStackView {
         let unlockPanel = NSStackView()
         unlockPanel.orientation = .vertical
         unlockPanel.alignment = .centerX
-        unlockPanel.spacing = 9
-        unlockPanel.edgeInsets = NSEdgeInsets(top: 16, left: 18, bottom: 16, right: 18)
+        unlockPanel.spacing = 8
+        unlockPanel.edgeInsets = NSEdgeInsets(top: 10, left: 12, bottom: 10, right: 12)
         unlockPanel.wantsLayer = true
-        unlockPanel.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.28).cgColor
-        unlockPanel.layer?.cornerRadius = 14
+        unlockPanel.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.18).cgColor
+        unlockPanel.layer?.cornerRadius = 12
         unlockPanel.layer?.borderWidth = 1
-        unlockPanel.layer?.borderColor = NSColor.white.withAlphaComponent(0.18).cgColor
-
-        let title = NSTextField(labelWithString: "Enter Awayo passcode")
-        title.font = .systemFont(ofSize: 13, weight: .bold)
-        title.textColor = NSColor.white.withAlphaComponent(0.72)
+        unlockPanel.layer?.borderColor = NSColor.white.withAlphaComponent(0.12).cgColor
 
         let unlockRow = NSStackView()
         unlockRow.orientation = .horizontal
@@ -287,7 +281,7 @@ final class PrivacyOverlayView: NSView {
         unlockRow.spacing = 8
 
         unlockField.placeholderString = "Passcode"
-        unlockField.font = .systemFont(ofSize: 18, weight: .semibold)
+        unlockField.font = .systemFont(ofSize: 16, weight: .semibold)
         unlockField.alignment = .center
         unlockField.target = self
         unlockField.action = #selector(checkPasscode)
@@ -297,14 +291,14 @@ final class PrivacyOverlayView: NSView {
         unlockButton.target = self
         unlockButton.action = #selector(checkPasscode)
         unlockButton.bezelStyle = .rounded
-        unlockButton.controlSize = .large
-        unlockButton.font = .systemFont(ofSize: 15, weight: .bold)
+        unlockButton.controlSize = .regular
+        unlockButton.font = .systemFont(ofSize: 13, weight: .bold)
 
         safetyExitButton.target = self
         safetyExitButton.action = #selector(safetyExit)
         safetyExitButton.bezelStyle = .rounded
-        safetyExitButton.controlSize = .regular
-        safetyExitButton.font = .systemFont(ofSize: 12, weight: .semibold)
+        safetyExitButton.controlSize = .small
+        safetyExitButton.font = .systemFont(ofSize: 11, weight: .semibold)
 
         unlockErrorLabel.font = .systemFont(ofSize: 12, weight: .semibold)
         unlockErrorLabel.textColor = NSColor(calibratedRed: 1.0, green: 0.55, blue: 0.45, alpha: 1)
@@ -313,18 +307,10 @@ final class PrivacyOverlayView: NSView {
 
         unlockRow.addArrangedSubview(unlockField)
         unlockRow.addArrangedSubview(unlockButton)
-        unlockField.widthAnchor.constraint(equalToConstant: 280).isActive = true
+        unlockField.widthAnchor.constraint(equalToConstant: 240).isActive = true
 
-        let safetyText = NSTextField(labelWithString: "Awayo Lock covers the screen. Safety Exit is here if passcode entry glitches.")
-        safetyText.font = .systemFont(ofSize: 11, weight: .medium)
-        safetyText.textColor = NSColor.white.withAlphaComponent(0.46)
-        safetyText.alignment = .center
-        safetyText.maximumNumberOfLines = 2
-
-        unlockPanel.addArrangedSubview(title)
         unlockPanel.addArrangedSubview(unlockRow)
         unlockPanel.addArrangedSubview(unlockErrorLabel)
-        unlockPanel.addArrangedSubview(safetyText)
         unlockPanel.addArrangedSubview(safetyExitButton)
         return unlockPanel
     }
@@ -546,30 +532,18 @@ final class PrivacyOverlayView: NSView {
         content.layer?.backgroundColor = NSColor.clear.cgColor
         content.layer?.borderWidth = 0
         content.layer?.cornerRadius = 8
-        content.spacing = 18
+        content.spacing = 14
 
         switch awayoAppearance.dashboardStyle {
         case .centerStage:
             messageLabel.textColor = .white
-            activityLabel.isHidden = false
         case .paperDesk:
-            content.edgeInsets = NSEdgeInsets(top: 26, left: 34, bottom: 26, right: 34)
-            content.layer?.backgroundColor = NSColor(calibratedWhite: 0.98, alpha: 0.16).cgColor
-            content.layer?.borderWidth = 1
-            content.layer?.borderColor = NSColor.white.withAlphaComponent(0.22).cgColor
             messageLabel.textColor = NSColor(calibratedRed: 1.0, green: 0.97, blue: 0.84, alpha: 1)
-            activityLabel.isHidden = false
         case .minimalBadge:
-            content.spacing = 12
+            content.spacing = 10
             messageLabel.textColor = .white
-            activityLabel.isHidden = true
         case .commandCenter:
-            content.edgeInsets = NSEdgeInsets(top: 28, left: 38, bottom: 28, right: 38)
-            content.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.28).cgColor
-            content.layer?.borderWidth = 1
-            content.layer?.borderColor = NSColor.white.withAlphaComponent(0.18).cgColor
             messageLabel.textColor = .white
-            activityLabel.isHidden = false
         }
     }
 
@@ -605,26 +579,26 @@ final class PrivacyOverlayView: NSView {
     private func messageFont(compact: Bool) -> NSFont {
         switch awayoAppearance.dashboardStyle {
         case .centerStage:
-            .systemFont(ofSize: compact ? 34 : 58, weight: .black)
+            .systemFont(ofSize: compact ? 30 : 46, weight: .heavy)
         case .paperDesk:
-            .systemFont(ofSize: compact ? 32 : 52, weight: .heavy)
+            .systemFont(ofSize: compact ? 30 : 42, weight: .heavy)
         case .minimalBadge:
-            .systemFont(ofSize: compact ? 28 : 44, weight: .bold)
+            .systemFont(ofSize: compact ? 26 : 38, weight: .bold)
         case .commandCenter:
-            .systemFont(ofSize: compact ? 32 : 54, weight: .black)
+            .systemFont(ofSize: compact ? 30 : 44, weight: .heavy)
         }
     }
 
     private func timerFont(compact: Bool) -> NSFont {
         switch awayoAppearance.timerStyle {
         case .heroCountdown:
-            .monospacedDigitSystemFont(ofSize: compact ? 48 : 86, weight: .heavy)
+            .monospacedDigitSystemFont(ofSize: compact ? 42 : 64, weight: .heavy)
         case .paperClock:
-            .systemFont(ofSize: compact ? 44 : 78, weight: .black)
+            .systemFont(ofSize: compact ? 40 : 58, weight: .black)
         case .glassPill:
-            .monospacedDigitSystemFont(ofSize: compact ? 38 : 64, weight: .bold)
+            .monospacedDigitSystemFont(ofSize: compact ? 34 : 50, weight: .bold)
         case .terminalTicker:
-            .monospacedSystemFont(ofSize: compact ? 34 : 56, weight: .bold)
+            .monospacedSystemFont(ofSize: compact ? 30 : 44, weight: .bold)
         }
     }
 
@@ -633,42 +607,13 @@ final class PrivacyOverlayView: NSView {
     }
 
     private func configurePillLabel(_ label: NSTextField, foreground: NSColor, background: NSColor) {
-        label.font = .monospacedSystemFont(ofSize: 13, weight: .heavy)
+        label.font = .monospacedSystemFont(ofSize: 11, weight: .heavy)
         label.textColor = foreground
         label.alignment = .center
         label.wantsLayer = true
         label.layer?.backgroundColor = background.cgColor
-        label.layer?.cornerRadius = 14
+        label.layer?.cornerRadius = 12
         label.layer?.masksToBounds = true
-    }
-
-    private func activityText(for style: AwayoLockStyle) -> String {
-        switch style {
-        case .duckPond:
-            "The pond is calm. Your agents are still paddling along."
-        case .offlineRunner:
-            "Your terminal keeps running while the tiny runner patrols the desert."
-        case .cosmicDesk:
-            "Agents, scripts, and background tasks are orbiting quietly."
-        case .rainyWindow:
-            "Your agents are still running behind the rain."
-        case .arcadePulse:
-            "Builds, agents, and scripts are earning points in the background."
-        case .paperNotes:
-            "Friends can leave sticky notes while your agents keep going."
-        case .synthwave:
-            "The grid is glowing and the scripts are still cruising."
-        case .neonFlow:
-            "Agents, scripts, builds, and local services are still moving."
-        case .solidColor:
-            "Quiet color, no distractions. Your work is still running."
-        case .softWash:
-            "A soft wash while agents and scripts keep moving."
-        case .stripes:
-            "Clean stripes, steady tasks."
-        case .polkaDots:
-            "Dots are holding the room while your work continues."
-        }
     }
 
     private func startAnimation() {
