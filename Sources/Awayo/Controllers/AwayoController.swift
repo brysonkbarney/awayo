@@ -94,7 +94,6 @@ final class AwayoController: NSObject {
         menu.addItem(NSMenuItem.separator())
         menu.addItem(menuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ",", symbol: "gearshape"))
         menu.addItem(menuItem(title: "Custom Duration...", action: #selector(startCustomDuration), symbol: "timer"))
-        addDebugPreviewMenu(to: menu)
 
         if session != nil {
             menu.addItem(menuItem(title: "Stop Awayo", action: #selector(stopAwayo), symbol: "stop.circle"))
@@ -141,15 +140,6 @@ final class AwayoController: NSObject {
         let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
         item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: title)
         return item
-    }
-
-    private func addDebugPreviewMenu(to menu: NSMenu) {
-        menu.addItem(NSMenuItem.separator())
-        menu.addItem(menuItem(
-            title: "Debug Lock Lab (90 Seconds)",
-            action: #selector(startDebugCurrentPreview),
-            symbol: "hammer"
-        ))
     }
 
     @objc private func startKeepAwakeFromMenu(_ sender: NSMenuItem) {
@@ -231,34 +221,6 @@ final class AwayoController: NSObject {
             startLockScreenFromMenu(fakeSender)
         default:
             break
-        }
-    }
-
-    @objc private func startDebugCurrentPreview() {
-        startDebugPreview(label: "current settings", appearance: settingsStore.appearance())
-    }
-
-    private func startDebugPreview(label: String, appearance: AwayoAppearance) {
-        guard ensureAwayoLockPasscodeExists() else {
-            return
-        }
-
-        let duration: TimeInterval = 90
-        let message = "debug preview: \(label)"
-        guard startSession(mode: .privacy, duration: duration, message: message), let session else {
-            return
-        }
-
-        privacyOverlay.show(
-            message: message,
-            endDate: session.endDate,
-            appearance: appearance,
-            showsDebugSampleNotes: true,
-            verifyPasscode: { [passcodeStore] passcode in
-                passcodeStore.verify(passcode)
-            }
-        ) { [weak self] in
-            self?.stopSession()
         }
     }
 

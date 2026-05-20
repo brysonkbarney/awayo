@@ -7,7 +7,6 @@ final class PrivacyOverlayController: NSObject {
         let message: String
         let endDate: Date?
         let appearance: AwayoAppearance
-        let showsDebugSampleNotes: Bool
         let verifyPasscode: (String) -> Bool
         let onUnlock: () -> Void
     }
@@ -50,7 +49,6 @@ final class PrivacyOverlayController: NSObject {
         message: String,
         endDate: Date?,
         appearance: AwayoAppearance,
-        showsDebugSampleNotes: Bool = false,
         verifyPasscode: @escaping (String) -> Bool,
         onUnlock: @escaping () -> Void
     ) {
@@ -58,7 +56,6 @@ final class PrivacyOverlayController: NSObject {
             message: message,
             endDate: endDate,
             appearance: appearance,
-            showsDebugSampleNotes: showsDebugSampleNotes,
             verifyPasscode: verifyPasscode,
             onUnlock: onUnlock
         )
@@ -145,7 +142,6 @@ final class PrivacyOverlayController: NSObject {
                 message: configuration.message,
                 endDate: configuration.endDate,
                 appearance: configuration.appearance,
-                showsDebugSampleNotes: configuration.showsDebugSampleNotes,
                 verifyPasscode: configuration.verifyPasscode,
                 showsUnlockField: isMainDisplay,
                 onUnlock: configuration.onUnlock
