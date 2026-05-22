@@ -20,6 +20,7 @@ final class PrivacyOverlayView: NSView {
     private let noteComposer = NSStackView()
     private let verifyPasscode: (String) -> Bool
     private let showsUnlockField: Bool
+    private let screenSnapshot: NSImage?
     private let onUnlock: () -> Void
 
     private var animationTimer: Timer?
@@ -34,11 +35,15 @@ final class PrivacyOverlayView: NSView {
     private var style: AwayoLockStyle {
         awayoAppearance.backgroundStyle
     }
+    private var allowsNoteFeatures: Bool {
+        showsUnlockField && style != .screenSnapshot && awayoAppearance.noteStyle != .hidden
+    }
 
     init(
         message: String,
         endDate: Date?,
         appearance: AwayoAppearance,
+        screenSnapshot: NSImage?,
         verifyPasscode: @escaping (String) -> Bool,
         showsUnlockField: Bool,
         onUnlock: @escaping () -> Void
@@ -46,6 +51,7 @@ final class PrivacyOverlayView: NSView {
         self.verifyPasscode = verifyPasscode
         self.awayoAppearance = appearance
         self.showsUnlockField = showsUnlockField
+        self.screenSnapshot = screenSnapshot
         self.onUnlock = onUnlock
         super.init(frame: .zero)
 
@@ -68,7 +74,10 @@ final class PrivacyOverlayView: NSView {
             return hitView
         }
 
-        let interactiveViews: [NSView] = [unlockField, unlockButton, notePanel, noteComposerHost]
+        var interactiveViews: [NSView] = [unlockField, unlockButton]
+        if allowsNoteFeatures {
+            interactiveViews.append(contentsOf: [notePanel, noteComposerHost])
+        }
         if interactiveViews.contains(where: { hitView === $0 || hitView.isDescendant(of: $0) }) {
             return hitView
         }
@@ -93,7 +102,7 @@ final class PrivacyOverlayView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
-        guard showsUnlockField else {
+        guard allowsNoteFeatures else {
             return
         }
 
@@ -112,7 +121,7 @@ final class PrivacyOverlayView: NSView {
     }
 
     func focusUnlockFieldIfAppropriate() {
-        guard showsUnlockField, !noteComposerActive, !isTypingInUnlockField else {
+        guard showsUnlockField, style != .screenSnapshot, !noteComposerActive, !isTypingInUnlockField else {
             return
         }
 
@@ -141,7 +150,9 @@ final class PrivacyOverlayView: NSView {
         messageLabel.font = messageFont(compact: bounds.width < 760)
         countdownLabel.font = timerFont(compact: bounds.width < 760)
         backAtLabel.font = .systemFont(ofSize: bounds.width < 760 ? 14 : 18, weight: .semibold)
-        positionFloatingNotes()
+        if allowsNoteFeatures {
+            positionFloatingNotes()
+        }
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -170,10 +181,20 @@ final class PrivacyOverlayView: NSView {
             drawStripes(in: bounds)
         case .polkaDots:
             drawPolkaDots(in: bounds)
+        case .screenSnapshot:
+            drawScreenSnapshot(in: bounds)
         }
     }
 
     func update(endDate: Date?) {
+        guard awayoAppearance.timerStyle != .hidden else {
+            countdownLabel.stringValue = ""
+            backAtLabel.stringValue = ""
+            countdownLabel.isHidden = true
+            backAtLabel.isHidden = true
+            return
+        }
+
         if let endDate {
             let value = DurationFormatter.awayoString(from: max(0, endDate.timeIntervalSinceNow))
             countdownLabel.stringValue = awayoAppearance.timerStyle == .terminalTicker ? "$ \(value)" : value
@@ -185,6 +206,11 @@ final class PrivacyOverlayView: NSView {
     }
 
     private func setupView(message: String, endDate: Date?, showsUnlockField: Bool) {
+        if style == .screenSnapshot {
+            setupScreenSnapshotView(showsUnlockField: showsUnlockField)
+            return
+        }
+
         let content = NSStackView()
         content.orientation = .vertical
         content.alignment = .centerX
@@ -205,7 +231,9 @@ final class PrivacyOverlayView: NSView {
 
         topRow.addArrangedSubview(badgeLabel)
 
-        messageLabel.stringValue = displayMessage(from: message)
+        let displayMessage = displayMessage(from: message)
+        messageLabel.stringValue = displayMessage
+        messageLabel.isHidden = displayMessage.isEmpty
         messageLabel.textColor = .white
         messageLabel.alignment = .center
         messageLabel.maximumNumberOfLines = 3
@@ -244,9 +272,24 @@ final class PrivacyOverlayView: NSView {
             content.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -48)
         ])
 
-        if showsUnlockField {
+        if allowsNoteFeatures {
             setupNotePanel()
         }
+    }
+
+    private func setupScreenSnapshotView(showsUnlockField: Bool) {
+        guard showsUnlockField else {
+            return
+        }
+
+        let unlockPanel = makeUnlockRow()
+        unlockPanel.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(unlockPanel)
+
+        NSLayoutConstraint.activate([
+            unlockPanel.centerXAnchor.constraint(equalTo: centerXAnchor),
+            unlockPanel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -18)
+        ])
     }
 
     private func displayMessage(from message: String) -> String {
@@ -264,6 +307,10 @@ final class PrivacyOverlayView: NSView {
     }
 
     private func makeUnlockRow() -> NSStackView {
+        if style == .screenSnapshot {
+            return makeSnapshotUnlockRow()
+        }
+
         let unlockPanel = NSStackView()
         unlockPanel.orientation = .vertical
         unlockPanel.alignment = .centerX
@@ -308,6 +355,62 @@ final class PrivacyOverlayView: NSView {
         unlockRow.addArrangedSubview(unlockField)
         unlockRow.addArrangedSubview(unlockButton)
         unlockField.widthAnchor.constraint(equalToConstant: 240).isActive = true
+
+        unlockPanel.addArrangedSubview(unlockRow)
+        unlockPanel.addArrangedSubview(unlockErrorLabel)
+        unlockPanel.addArrangedSubview(safetyExitButton)
+        return unlockPanel
+    }
+
+    private func makeSnapshotUnlockRow() -> NSStackView {
+        let unlockPanel = NSStackView()
+        unlockPanel.orientation = .vertical
+        unlockPanel.alignment = .centerX
+        unlockPanel.spacing = 3
+        unlockPanel.edgeInsets = NSEdgeInsets(top: 5, left: 7, bottom: 5, right: 7)
+        unlockPanel.wantsLayer = true
+        unlockPanel.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.12).cgColor
+        unlockPanel.layer?.cornerRadius = 7
+        unlockPanel.layer?.borderWidth = 1
+        unlockPanel.layer?.borderColor = NSColor.white.withAlphaComponent(0.08).cgColor
+
+        let unlockRow = NSStackView()
+        unlockRow.orientation = .horizontal
+        unlockRow.alignment = .centerY
+        unlockRow.spacing = 4
+
+        unlockField.placeholderString = "Password"
+        unlockField.font = .systemFont(ofSize: 11, weight: .medium)
+        unlockField.alignment = .center
+        unlockField.target = self
+        unlockField.action = #selector(checkPasscode)
+        unlockField.translatesAutoresizingMaskIntoConstraints = false
+        unlockField.bezelStyle = .roundedBezel
+        unlockField.controlSize = .small
+
+        unlockButton.title = "OK"
+        unlockButton.target = self
+        unlockButton.action = #selector(checkPasscode)
+        unlockButton.bezelStyle = .rounded
+        unlockButton.controlSize = .small
+        unlockButton.font = .systemFont(ofSize: 10, weight: .bold)
+
+        safetyExitButton.title = "Exit"
+        safetyExitButton.target = self
+        safetyExitButton.action = #selector(safetyExit)
+        safetyExitButton.bezelStyle = .inline
+        safetyExitButton.controlSize = .mini
+        safetyExitButton.font = .systemFont(ofSize: 9, weight: .medium)
+        safetyExitButton.alphaValue = 0.48
+
+        unlockErrorLabel.font = .systemFont(ofSize: 9, weight: .semibold)
+        unlockErrorLabel.textColor = NSColor(calibratedRed: 1.0, green: 0.55, blue: 0.45, alpha: 0.9)
+        unlockErrorLabel.alignment = .center
+        unlockErrorLabel.isHidden = true
+
+        unlockRow.addArrangedSubview(unlockField)
+        unlockRow.addArrangedSubview(unlockButton)
+        unlockField.widthAnchor.constraint(equalToConstant: 128).isActive = true
 
         unlockPanel.addArrangedSubview(unlockRow)
         unlockPanel.addArrangedSubview(unlockErrorLabel)
@@ -579,6 +682,7 @@ final class PrivacyOverlayView: NSView {
 
     private func applyTimerStyle() {
         countdownLabel.wantsLayer = true
+        countdownLabel.isHidden = false
         countdownLabel.layer?.cornerRadius = 8
         countdownLabel.layer?.masksToBounds = true
         countdownLabel.layer?.borderWidth = 0
@@ -605,6 +709,10 @@ final class PrivacyOverlayView: NSView {
             countdownLabel.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.42).cgColor
             countdownLabel.layer?.borderWidth = 1
             countdownLabel.layer?.borderColor = NSColor(calibratedRed: 0.48, green: 1.0, blue: 0.66, alpha: 0.34).cgColor
+        case .hidden:
+            countdownLabel.isHidden = true
+            backAtLabel.isHidden = true
+            countdownLabel.layer?.backgroundColor = NSColor.clear.cgColor
         }
     }
 
@@ -631,6 +739,8 @@ final class PrivacyOverlayView: NSView {
             .monospacedDigitSystemFont(ofSize: compact ? 34 : 50, weight: .bold)
         case .terminalTicker:
             .monospacedSystemFont(ofSize: compact ? 30 : 44, weight: .bold)
+        case .hidden:
+            .systemFont(ofSize: compact ? 1 : 1, weight: .regular)
         }
     }
 
@@ -892,6 +1002,25 @@ final class PrivacyOverlayView: NSView {
         }
 
         drawSubtleVignette(in: rect)
+    }
+
+    private func drawScreenSnapshot(in rect: NSRect) {
+        guard let screenSnapshot else {
+            NSColor.black.setFill()
+            rect.fill()
+            drawSubtleVignette(in: rect)
+            return
+        }
+
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current?.imageInterpolation = .high
+        screenSnapshot.draw(
+            in: rect,
+            from: NSRect(origin: .zero, size: screenSnapshot.size),
+            operation: .copy,
+            fraction: 1
+        )
+        NSGraphicsContext.restoreGraphicsState()
     }
 
     private func drawGradient(in rect: NSRect, colors: [NSColor], angle: CGFloat) {
@@ -1503,6 +1632,8 @@ private final class StickyNoteCardView: NSView {
         case .markerCard:
             drawMarkerStroke()
             drawFoldedCorner()
+        case .hidden:
+            break
         }
     }
 
@@ -1512,7 +1643,7 @@ private final class StickyNoteCardView: NSView {
             return NSColor.white.withAlphaComponent(0.22)
         case .markerCard:
             return NSColor(calibratedWhite: 0.98, alpha: 0.96)
-        case .tapedPaper, .stickyStack:
+        case .tapedPaper, .stickyStack, .hidden:
             break
         }
 
@@ -1536,7 +1667,7 @@ private final class StickyNoteCardView: NSView {
             .systemFont(ofSize: 12, weight: .black)
         case .tapedPaper:
             .systemFont(ofSize: 12, weight: .heavy)
-        case .stickyStack, .glassCard:
+        case .stickyStack, .glassCard, .hidden:
             .systemFont(ofSize: 12, weight: .bold)
         }
     }
@@ -1549,7 +1680,7 @@ private final class StickyNoteCardView: NSView {
             .systemFont(ofSize: 13, weight: .semibold)
         case .stickyStack:
             .systemFont(ofSize: 13, weight: .bold)
-        case .glassCard:
+        case .glassCard, .hidden:
             .systemFont(ofSize: 13, weight: .semibold)
         }
     }

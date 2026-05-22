@@ -29,6 +29,7 @@ enum AwayoTimerStyle: String, CaseIterable {
     case paperClock
     case glassPill
     case terminalTicker
+    case hidden
 
     var title: String {
         switch self {
@@ -40,6 +41,8 @@ enum AwayoTimerStyle: String, CaseIterable {
             "Glass Pill"
         case .terminalTicker:
             "Terminal Ticker"
+        case .hidden:
+            "No Timer"
         }
     }
 }
@@ -69,6 +72,7 @@ enum AwayoNoteStyle: String, CaseIterable {
     case stickyStack
     case glassCard
     case markerCard
+    case hidden
 
     var title: String {
         switch self {
@@ -80,6 +84,8 @@ enum AwayoNoteStyle: String, CaseIterable {
             "Glass Card"
         case .markerCard:
             "Marker Card"
+        case .hidden:
+            "No Sticky Notes"
         }
     }
 }

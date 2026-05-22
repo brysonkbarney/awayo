@@ -7,6 +7,7 @@ final class PrivacyOverlayController: NSObject {
         let message: String
         let endDate: Date?
         let appearance: AwayoAppearance
+        let screenSnapshots: [CGDirectDisplayID: NSImage]
         let verifyPasscode: (String) -> Bool
         let onUnlock: () -> Void
     }
@@ -52,10 +53,15 @@ final class PrivacyOverlayController: NSObject {
         verifyPasscode: @escaping (String) -> Bool,
         onUnlock: @escaping () -> Void
     ) {
+        let screenSnapshots = appearance.backgroundStyle == .screenSnapshot
+            ? Self.captureScreenSnapshots()
+            : [:]
+
         configuration = Configuration(
             message: message,
             endDate: endDate,
             appearance: appearance,
+            screenSnapshots: screenSnapshots,
             verifyPasscode: verifyPasscode,
             onUnlock: onUnlock
         )
@@ -138,10 +144,12 @@ final class PrivacyOverlayController: NSObject {
 
         windows = NSScreen.screens.map { screen in
             let isMainDisplay = screen == mainScreen
+            let displayID = Self.displayID(for: screen)
             let view = PrivacyOverlayView(
                 message: configuration.message,
                 endDate: configuration.endDate,
                 appearance: configuration.appearance,
+                screenSnapshot: displayID.flatMap { configuration.screenSnapshots[$0] },
                 verifyPasscode: configuration.verifyPasscode,
                 showsUnlockField: isMainDisplay,
                 onUnlock: configuration.onUnlock
@@ -183,6 +191,32 @@ final class PrivacyOverlayController: NSObject {
 
         mainWindow?.makeKeyAndOrderFront(nil)
         mainOverlayView?.focusUnlockFieldIfAppropriate()
+    }
+
+    private static func captureScreenSnapshots() -> [CGDirectDisplayID: NSImage] {
+        var snapshots: [CGDirectDisplayID: NSImage] = [:]
+
+        if !CGPreflightScreenCaptureAccess() {
+            _ = CGRequestScreenCaptureAccess()
+        }
+
+        NSScreen.screens.forEach { screen in
+            guard
+                let displayID = displayID(for: screen),
+                let cgImage = CGDisplayCreateImage(displayID)
+            else {
+                return
+            }
+
+            snapshots[displayID] = NSImage(cgImage: cgImage, size: screen.frame.size)
+        }
+
+        return snapshots
+    }
+
+    private static func displayID(for screen: NSScreen) -> CGDirectDisplayID? {
+        let key = NSDeviceDescriptionKey("NSScreenNumber")
+        return (screen.deviceDescription[key] as? NSNumber).map { CGDirectDisplayID($0.uint32Value) }
     }
 
     @objc private func enforceLockSurface() {

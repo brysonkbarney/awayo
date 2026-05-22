@@ -22,6 +22,8 @@ final class AwayoSettingsWindowController: NSWindowController {
     private let backgroundColorSwatch = AwayoColorSwatchView()
     private var passcodeStatusLabel = NSTextField(labelWithString: "")
     private let passcodeButton = NSButton(title: "Set Passcode", target: nil, action: nil)
+    private let awayNoteToggle = NSButton(checkboxWithTitle: "Show away note", target: nil, action: nil)
+    private let awayNoteField = NSTextField(string: "")
     private var modalButtonTargets: [ModalButtonTarget] = []
     private var onboarding = false
 
@@ -59,6 +61,7 @@ final class AwayoSettingsWindowController: NSWindowController {
         refreshHeader()
         refreshSelections()
         refreshPasscodeStatus()
+        refreshAwayNoteControls()
         showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -103,6 +106,7 @@ final class AwayoSettingsWindowController: NSWindowController {
 
         content.addArrangedSubview(headerView())
         content.addArrangedSubview(passcodeSection())
+        content.addArrangedSubview(awayNoteSection())
         content.addArrangedSubview(sectionTitle("Backgrounds", "Pick the scene or quiet pattern Awayo Lock uses every time it starts."))
         content.addArrangedSubview(tileGrid(for: .background))
         content.addArrangedSubview(customColorControl())
@@ -199,6 +203,56 @@ final class AwayoSettingsWindowController: NSWindowController {
         ])
 
         refreshPasscodeStatus()
+        return card
+    }
+
+    private func awayNoteSection() -> NSView {
+        let card = cardView()
+
+        let stack = NSStackView()
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 12
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(stack)
+
+        let title = NSTextField(labelWithString: "Away Note")
+        title.font = .systemFont(ofSize: 17, weight: .bold)
+        title.textColor = .labelColor
+
+        let subtitle = NSTextField(labelWithString: "Set the note once here, or turn it off for a quieter lock screen.")
+        subtitle.font = .systemFont(ofSize: 13, weight: .medium)
+        subtitle.textColor = .secondaryLabelColor
+        subtitle.maximumNumberOfLines = 2
+        subtitle.preferredMaxLayoutWidth = 820
+
+        awayNoteToggle.target = self
+        awayNoteToggle.action = #selector(awayNoteToggled(_:))
+        awayNoteToggle.font = .systemFont(ofSize: 13, weight: .semibold)
+
+        awayNoteField.placeholderString = AwayoSettingsStore.defaultAwayMessage
+        awayNoteField.font = .systemFont(ofSize: 15, weight: .semibold)
+        awayNoteField.bezelStyle = .roundedBezel
+        awayNoteField.target = self
+        awayNoteField.action = #selector(awayNoteChanged(_:))
+        awayNoteField.translatesAutoresizingMaskIntoConstraints = false
+
+        stack.addArrangedSubview(title)
+        stack.addArrangedSubview(subtitle)
+        stack.addArrangedSubview(awayNoteToggle)
+        stack.addArrangedSubview(awayNoteField)
+
+        NSLayoutConstraint.activate([
+            awayNoteField.widthAnchor.constraint(equalToConstant: 520),
+
+            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 18),
+            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -18),
+            stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 18),
+            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -18),
+            card.widthAnchor.constraint(equalToConstant: 940)
+        ])
+
+        refreshAwayNoteControls()
         return card
     }
 
@@ -320,6 +374,16 @@ final class AwayoSettingsWindowController: NSWindowController {
         return row
     }
 
+    @objc private func awayNoteToggled(_ sender: NSButton) {
+        settingsStore.saveShowsAwayMessage(sender.state == .on)
+        refreshAwayNoteControls()
+    }
+
+    @objc private func awayNoteChanged(_ sender: NSTextField) {
+        settingsStore.saveAwayMessage(sender.stringValue)
+        refreshAwayNoteControls()
+    }
+
     @objc private func selectTile(_ sender: AwayoPreviewTile) {
         switch sender.category {
         case .background:
@@ -385,13 +449,16 @@ final class AwayoSettingsWindowController: NSWindowController {
         }
 
         passcodeStore.savePasscode(values.passcode)
+        settingsStore.saveShowsAwayMessage(values.noteEnabled)
+        settingsStore.saveAwayMessage(values.note)
         onPasscodeChange()
         refreshPasscodeStatus()
+        refreshAwayNoteControls()
     }
 
-    private func promptForPasscode() -> (passcode: String, confirmation: String)? {
+    private func promptForPasscode() -> (passcode: String, confirmation: String, noteEnabled: Bool, note: String)? {
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 430, height: 278),
+            contentRect: NSRect(x: 0, y: 0, width: 430, height: 372),
             styleMask: [.titled],
             backing: .buffered,
             defer: false
@@ -445,6 +512,16 @@ final class AwayoSettingsWindowController: NSWindowController {
         confirmationField.bezelStyle = .roundedBezel
         confirmationField.widthAnchor.constraint(equalToConstant: 360).isActive = true
 
+        let noteToggle = NSButton(checkboxWithTitle: "Show away note", target: nil, action: nil)
+        noteToggle.font = .systemFont(ofSize: 13, weight: .semibold)
+        noteToggle.state = settingsStore.showsAwayMessage() ? .on : .off
+
+        let noteField = NSTextField(string: settingsStore.awayMessage())
+        noteField.placeholderString = AwayoSettingsStore.defaultAwayMessage
+        noteField.font = .systemFont(ofSize: 14, weight: .semibold)
+        noteField.bezelStyle = .roundedBezel
+        noteField.widthAnchor.constraint(equalToConstant: 360).isActive = true
+
         let buttonRow = NSStackView()
         buttonRow.orientation = .horizontal
         buttonRow.alignment = .centerY
@@ -480,6 +557,8 @@ final class AwayoSettingsWindowController: NSWindowController {
         stack.addArrangedSubview(subtitle)
         stack.addArrangedSubview(passcodeField)
         stack.addArrangedSubview(confirmationField)
+        stack.addArrangedSubview(noteToggle)
+        stack.addArrangedSubview(noteField)
         stack.addArrangedSubview(buttonRow)
 
         NSLayoutConstraint.activate([
@@ -499,10 +578,17 @@ final class AwayoSettingsWindowController: NSWindowController {
             return nil
         }
 
-        return (passcodeField.stringValue, confirmationField.stringValue)
+        return (
+            passcodeField.stringValue,
+            confirmationField.stringValue,
+            noteToggle.state == .on,
+            noteField.stringValue
+        )
     }
 
     @objc private func done() {
+        settingsStore.saveAwayMessage(awayNoteField.stringValue)
+
         if onboarding && !passcodeStore.hasPasscode() {
             showError("Set an Awayo Lock passcode to finish setup.")
             return
@@ -520,6 +606,14 @@ final class AwayoSettingsWindowController: NSWindowController {
         timerTiles.forEach { $0.isSelected = $0.rawValue == appearance.timerStyle.rawValue }
         dashboardTiles.forEach { $0.isSelected = $0.rawValue == appearance.dashboardStyle.rawValue }
         noteTiles.forEach { $0.isSelected = $0.rawValue == appearance.noteStyle.rawValue }
+    }
+
+    private func refreshAwayNoteControls() {
+        let showsAwayMessage = settingsStore.showsAwayMessage()
+        awayNoteToggle.state = showsAwayMessage ? .on : .off
+        awayNoteField.stringValue = settingsStore.awayMessage()
+        awayNoteField.isEnabled = showsAwayMessage
+        awayNoteField.alphaValue = showsAwayMessage ? 1 : 0.55
     }
 
     private func refreshPasscodeStatus() {
@@ -720,6 +814,8 @@ final class AwayoPreviewTile: NSButton {
             drawMiniStripes(in: rect)
         case .polkaDots:
             drawMiniPolkaDots(in: rect)
+        case .screenSnapshot:
+            drawMiniScreenSnapshot(in: rect)
         }
     }
 
@@ -753,6 +849,13 @@ final class AwayoPreviewTile: NSButton {
             ])
             drawTerminalChrome(in: rect.insetBy(dx: 14, dy: 18))
             drawText("$ awayo --14m", in: rect.insetBy(dx: 24, dy: 42), font: .monospacedSystemFont(ofSize: 17, weight: .bold), color: NSColor(calibratedRed: 0.47, green: 1.0, blue: 0.63, alpha: 1), alignment: .left)
+        case .hidden:
+            roundedGradient(in: rect, colors: [
+                NSColor(calibratedRed: 0.08, green: 0.09, blue: 0.11, alpha: 1),
+                NSColor(calibratedRed: 0.02, green: 0.02, blue: 0.03, alpha: 1)
+            ])
+            drawPill(in: NSRect(x: rect.midX - 50, y: rect.midY - 9, width: 100, height: 18), color: NSColor.white.withAlphaComponent(0.12))
+            drawText("no timer", in: NSRect(x: rect.midX - 54, y: rect.midY - 8, width: 108, height: 18), font: .systemFont(ofSize: 13, weight: .bold), color: .white.withAlphaComponent(0.84))
         }
     }
 
@@ -832,6 +935,9 @@ final class AwayoPreviewTile: NSButton {
             line.line(to: NSPoint(x: noteRect.maxX - 14, y: noteRect.midY + 4))
             line.lineWidth = 4
             line.stroke()
+        case .hidden:
+            drawPill(in: NSRect(x: rect.midX - 56, y: rect.midY - 12, width: 112, height: 24), color: NSColor.white.withAlphaComponent(0.14))
+            drawText("no notes", in: NSRect(x: rect.midX - 54, y: rect.midY - 9, width: 108, height: 18), font: .systemFont(ofSize: 13, weight: .bold), color: .white.withAlphaComponent(0.84))
         }
     }
 
@@ -1026,6 +1132,30 @@ final class AwayoPreviewTile: NSButton {
                 NSBezierPath(ovalIn: NSRect(x: x, y: y, width: 8, height: 8)).fill()
             }
         }
+    }
+
+    private func drawMiniScreenSnapshot(in rect: NSRect) {
+        roundedGradient(in: rect, colors: [
+            NSColor(calibratedRed: 0.10, green: 0.24, blue: 0.34, alpha: 1),
+            NSColor(calibratedRed: 0.05, green: 0.07, blue: 0.09, alpha: 1)
+        ])
+
+        let menu = NSRect(x: rect.minX, y: rect.maxY - 16, width: rect.width, height: 16)
+        NSColor.black.withAlphaComponent(0.36).setFill()
+        menu.fill()
+
+        let window = NSRect(x: rect.minX + 28, y: rect.minY + 30, width: rect.width - 56, height: rect.height - 58)
+        drawPill(in: window, color: NSColor.white.withAlphaComponent(0.16))
+        strokePill(in: window, color: NSColor.white.withAlphaComponent(0.22))
+
+        for index in 0..<4 {
+            let y = window.maxY - 24 - CGFloat(index) * 16
+            drawPill(in: NSRect(x: window.minX + 16, y: y, width: window.width - CGFloat(42 + index * 18), height: 5), color: NSColor.white.withAlphaComponent(0.28))
+        }
+
+        let input = NSRect(x: rect.midX - 34, y: rect.minY + 10, width: 68, height: 10)
+        drawPill(in: input, color: NSColor.black.withAlphaComponent(0.34))
+        strokePill(in: input, color: NSColor.white.withAlphaComponent(0.14))
     }
 
     private func drawPill(in rect: NSRect, color: NSColor) {

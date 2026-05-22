@@ -160,13 +160,13 @@ final class AwayoController: NSObject {
 
     @objc private func startPrivacyCoverFromMenu(_ sender: NSMenuItem) {
         let duration = duration(from: sender)
-        let details = promptForAwayoLockDetails(duration: duration)
 
-        guard let details else {
+        guard ensureAwayoLockPasscodeExists() else {
             return
         }
 
-        guard startSession(mode: .privacy, duration: duration, message: details.message) else {
+        let message = settingsStore.lockMessage()
+        guard startSession(mode: .privacy, duration: duration, message: message) else {
             return
         }
 
@@ -175,7 +175,7 @@ final class AwayoController: NSObject {
         }
 
         privacyOverlay.show(
-            message: details.message,
+            message: message,
             endDate: session.endDate,
             appearance: settingsStore.appearance(),
             verifyPasscode: { [passcodeStore] passcode in
@@ -323,52 +323,6 @@ final class AwayoController: NSObject {
         return seconds
     }
 
-    private func promptForAwayoLockDetails(duration: TimeInterval?) -> AwayoLockDetails? {
-        guard ensureAwayoLockPasscodeExists() else {
-            return nil
-        }
-
-        let alert = NSAlert()
-        alert.messageText = "Start Awayo Lock"
-        alert.informativeText = "Keep your Mac awake behind Awayo Lock. Choose the note people will see while your work keeps running."
-        alert.alertStyle = .informational
-
-        let stack = NSStackView()
-        stack.orientation = .vertical
-        stack.spacing = 8
-        stack.translatesAutoresizingMaskIntoConstraints = false
-
-        let messageField = NSTextField(string: defaultPrivacyMessage(duration: duration))
-        messageField.placeholderString = "Message"
-        messageField.frame.size.width = 340
-
-        stack.addArrangedSubview(label("Away message"))
-        stack.addArrangedSubview(messageField)
-
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 360, height: 54))
-        container.addSubview(stack)
-        NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            stack.topAnchor.constraint(equalTo: container.topAnchor),
-            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor)
-        ])
-
-        alert.accessoryView = container
-        alert.addButton(withTitle: "Start")
-        alert.addButton(withTitle: "Cancel")
-
-        guard alert.runModal() == .alertFirstButtonReturn else {
-            return nil
-        }
-
-        let message = messageField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        return AwayoLockDetails(
-            message: message.isEmpty ? "brb, agents are running" : message
-        )
-    }
-
     private func ensureAwayoLockPasscodeExists() -> Bool {
         if passcodeStore.hasPasscode() {
             return true
@@ -376,17 +330,6 @@ final class AwayoController: NSObject {
 
         showSettings(onboarding: true)
         return false
-    }
-
-    private func label(_ text: String) -> NSTextField {
-        let label = NSTextField(labelWithString: text)
-        label.font = .systemFont(ofSize: 11, weight: .semibold)
-        label.textColor = .secondaryLabelColor
-        return label
-    }
-
-    private func defaultPrivacyMessage(duration _: TimeInterval?) -> String {
-        "brb, agents are running"
     }
 
     private func remainingLabel(for session: AwayoSession) -> String {

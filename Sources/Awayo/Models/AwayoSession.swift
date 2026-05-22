@@ -23,10 +23,6 @@ struct AwayoSession {
     let message: String
 }
 
-struct AwayoLockDetails {
-    let message: String
-}
-
 enum AwayoLockStyle: String, CaseIterable {
     case neonFlow
     case duckPond
@@ -40,6 +36,7 @@ enum AwayoLockStyle: String, CaseIterable {
     case softWash
     case stripes
     case polkaDots
+    case screenSnapshot
 
     var title: String {
         switch self {
@@ -67,6 +64,8 @@ enum AwayoLockStyle: String, CaseIterable {
             "Stripes"
         case .polkaDots:
             "Polka Dots"
+        case .screenSnapshot:
+            "Screen Snapshot"
         }
     }
 
@@ -96,6 +95,8 @@ enum AwayoLockStyle: String, CaseIterable {
             "STRIPED AND AWAKE"
         case .polkaDots:
             "DOTS ON DUTY"
+        case .screenSnapshot:
+            "NOTHING TO SEE HERE"
         }
     }
 
