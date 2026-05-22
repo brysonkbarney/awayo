@@ -1974,6 +1974,10 @@ private final class SnapshotPrankCountdownView: NSView {
 }
 
 private final class AwayoCameraSnapshotter: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable {
+    private struct SnapshotResult: @unchecked Sendable {
+        let image: NSImage?
+    }
+
     private let completion: @MainActor (NSImage?) -> Void
     private let session = AVCaptureSession()
     private let output = AVCaptureVideoDataOutput()
@@ -2080,8 +2084,9 @@ private final class AwayoCameraSnapshotter: NSObject, AVCaptureVideoDataOutputSa
             session.stopRunning()
         }
 
-        DispatchQueue.main.async { [completion] in
-            completion(image)
+        let result = SnapshotResult(image: image)
+        DispatchQueue.main.async { [completion, result] in
+            completion(result.image)
         }
     }
 }
