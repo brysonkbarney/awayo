@@ -174,6 +174,7 @@ final class PrivacyOverlayController: NSObject {
             window.hidesOnDeactivate = false
             window.isOpaque = true
             window.isMovable = false
+            window.acceptsMouseMovedEvents = true
             window.isReleasedWhenClosed = false
             window.setFrame(screen.frame, display: true)
             window.contentView = view

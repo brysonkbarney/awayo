@@ -30,6 +30,8 @@
 	<true/>
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright 2026 Bryson Barney</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Awayo uses the camera for the visible NICE TRY photo booth gag in Screen Snapshot mode.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>NSSupportsAutomaticTermination</key>

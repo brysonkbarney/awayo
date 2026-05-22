@@ -18,6 +18,7 @@ let package = Package(
         .executableTarget(
             name: "Awayo",
             linkerSettings: [
+                .linkedFramework("AVFoundation"),
                 .linkedFramework("AppKit"),
                 .linkedFramework("IOKit")
             ]

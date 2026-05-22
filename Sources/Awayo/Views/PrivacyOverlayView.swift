@@ -1,4 +1,5 @@
 import AppKit
+@preconcurrency import AVFoundation
 
 @MainActor
 final class PrivacyOverlayView: NSView {
@@ -32,6 +33,17 @@ final class PrivacyOverlayView: NSView {
     private var runnerJumpOffset: CGFloat = 0
     private var runnerVelocity: CGFloat = 0
     private var runnerScore = 0
+    private var snapshotPrankTrackingArea: NSTrackingArea?
+    private var snapshotPrankCards: [SnapshotPrankCardView] = []
+    private var lastSnapshotPrankTime: TimeInterval = -Double.infinity
+    private var snapshotPrankCount = 0
+    private var snapshotPrankInProgress = false
+    private var snapshotPrankCountdownView: SnapshotPrankCountdownView?
+    private var snapshotPrankCountdownTimer: Timer?
+    private var snapshotPrankCamera: AwayoCameraSnapshotter?
+    private var snapshotPrankPendingPoint = NSPoint.zero
+    private var snapshotPrankRemainingSeconds = 3
+    private weak var snapshotUnlockPanel: NSView?
     private var style: AwayoLockStyle {
         awayoAppearance.backgroundStyle
     }
@@ -85,11 +97,36 @@ final class PrivacyOverlayView: NSView {
         return self
     }
 
+    override func updateTrackingAreas() {
+        if let snapshotPrankTrackingArea {
+            removeTrackingArea(snapshotPrankTrackingArea)
+            self.snapshotPrankTrackingArea = nil
+        }
+
+        super.updateTrackingAreas()
+
+        guard style == .screenSnapshot else {
+            return
+        }
+
+        let trackingArea = NSTrackingArea(
+            rect: .zero,
+            options: [.activeAlways, .inVisibleRect, .mouseMoved],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(trackingArea)
+        snapshotPrankTrackingArea = trackingArea
+    }
+
     override func viewWillMove(toWindow newWindow: NSWindow?) {
         super.viewWillMove(toWindow: newWindow)
 
         if newWindow == nil {
             stopAnimation()
+            snapshotPrankCountdownTimer?.invalidate()
+            snapshotPrankCountdownTimer = nil
+            snapshotPrankCamera = nil
         }
     }
 
@@ -118,6 +155,14 @@ final class PrivacyOverlayView: NSView {
         }
 
         showNoteComposer(at: point)
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        handleSnapshotPointerEvent(event)
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        handleSnapshotPointerEvent(event)
     }
 
     func focusUnlockFieldIfAppropriate() {
@@ -368,11 +413,13 @@ final class PrivacyOverlayView: NSView {
         unlockPanel.alignment = .centerX
         unlockPanel.spacing = 3
         unlockPanel.edgeInsets = NSEdgeInsets(top: 5, left: 7, bottom: 5, right: 7)
+        unlockPanel.alphaValue = 0.14
         unlockPanel.wantsLayer = true
-        unlockPanel.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.12).cgColor
+        unlockPanel.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.035).cgColor
         unlockPanel.layer?.cornerRadius = 7
         unlockPanel.layer?.borderWidth = 1
-        unlockPanel.layer?.borderColor = NSColor.white.withAlphaComponent(0.08).cgColor
+        unlockPanel.layer?.borderColor = NSColor.white.withAlphaComponent(0.025).cgColor
+        snapshotUnlockPanel = unlockPanel
 
         let unlockRow = NSStackView()
         unlockRow.orientation = .horizontal
@@ -387,6 +434,7 @@ final class PrivacyOverlayView: NSView {
         unlockField.translatesAutoresizingMaskIntoConstraints = false
         unlockField.bezelStyle = .roundedBezel
         unlockField.controlSize = .small
+        unlockField.alphaValue = 0.60
 
         unlockButton.title = "OK"
         unlockButton.target = self
@@ -394,6 +442,7 @@ final class PrivacyOverlayView: NSView {
         unlockButton.bezelStyle = .rounded
         unlockButton.controlSize = .small
         unlockButton.font = .systemFont(ofSize: 10, weight: .bold)
+        unlockButton.alphaValue = 0.56
 
         safetyExitButton.title = "Exit"
         safetyExitButton.target = self
@@ -401,7 +450,7 @@ final class PrivacyOverlayView: NSView {
         safetyExitButton.bezelStyle = .inline
         safetyExitButton.controlSize = .mini
         safetyExitButton.font = .systemFont(ofSize: 9, weight: .medium)
-        safetyExitButton.alphaValue = 0.48
+        safetyExitButton.alphaValue = 0.22
 
         unlockErrorLabel.font = .systemFont(ofSize: 9, weight: .semibold)
         unlockErrorLabel.textColor = NSColor(calibratedRed: 1.0, green: 0.55, blue: 0.45, alpha: 0.9)
@@ -416,6 +465,169 @@ final class PrivacyOverlayView: NSView {
         unlockPanel.addArrangedSubview(unlockErrorLabel)
         unlockPanel.addArrangedSubview(safetyExitButton)
         return unlockPanel
+    }
+
+    private func handleSnapshotPointerEvent(_ event: NSEvent) {
+        guard style == .screenSnapshot else {
+            return
+        }
+
+        let point = convert(event.locationInWindow, from: nil)
+        updateSnapshotUnlockVisibility(at: point)
+        showSnapshotPrankIfNeeded(at: point, timestamp: event.timestamp)
+    }
+
+    private func updateSnapshotUnlockVisibility(at point: NSPoint) {
+        guard let snapshotUnlockPanel else {
+            return
+        }
+
+        let shouldReveal = point.y <= 104 || isTypingInUnlockField
+        let targetAlpha: CGFloat = shouldReveal ? 0.86 : 0.14
+        guard abs(snapshotUnlockPanel.alphaValue - targetAlpha) > 0.02 else {
+            return
+        }
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.12
+            snapshotUnlockPanel.animator().alphaValue = targetAlpha
+        }
+    }
+
+    private func showSnapshotPrankIfNeeded(at point: NSPoint, timestamp: TimeInterval) {
+        guard style == .screenSnapshot, !snapshotPrankInProgress, !isTypingInUnlockField else {
+            return
+        }
+
+        guard bounds.contains(point), point.y > 112 else {
+            return
+        }
+
+        guard timestamp - lastSnapshotPrankTime > 4.0 else {
+            return
+        }
+
+        lastSnapshotPrankTime = timestamp
+        beginSnapshotPrank(at: point)
+    }
+
+    private func beginSnapshotPrank(at point: NSPoint) {
+        snapshotPrankInProgress = true
+        snapshotPrankCountdownTimer?.invalidate()
+
+        let countdownView = SnapshotPrankCountdownView()
+        countdownView.frame = countdownFrame(near: point)
+        addSubview(countdownView, positioned: .above, relativeTo: nil)
+        snapshotPrankCountdownView = countdownView
+
+        snapshotPrankPendingPoint = point
+        snapshotPrankRemainingSeconds = 3
+        countdownView.remainingSeconds = snapshotPrankRemainingSeconds
+        NSSound(named: NSSound.Name("Tink"))?.play()
+
+        snapshotPrankCountdownTimer = Timer.scheduledTimer(
+            timeInterval: 1,
+            target: self,
+            selector: #selector(snapshotPrankCountdownTick(_:)),
+            userInfo: nil,
+            repeats: true
+        )
+    }
+
+    @objc private func snapshotPrankCountdownTick(_ timer: Timer) {
+        snapshotPrankRemainingSeconds -= 1
+        if snapshotPrankRemainingSeconds > 0 {
+            snapshotPrankCountdownView?.remainingSeconds = snapshotPrankRemainingSeconds
+            NSSound(named: NSSound.Name("Tink"))?.play()
+            return
+        }
+
+        timer.invalidate()
+        snapshotPrankCountdownTimer = nil
+        snapshotPrankCountdownView?.statusText = "smile"
+        snapshotPrankCountdownView?.remainingSeconds = 0
+        captureSnapshotPrank(at: snapshotPrankPendingPoint)
+    }
+
+    private func captureSnapshotPrank(at point: NSPoint) {
+        let snapshotter = AwayoCameraSnapshotter { [weak self] image in
+            guard let self else {
+                return
+            }
+
+            self.snapshotPrankCamera = nil
+            self.snapshotPrankCountdownView?.removeFromSuperview()
+            self.snapshotPrankCountdownView = nil
+            self.snapshotPrankInProgress = false
+
+            if let image {
+                self.showSnapshotPrankCard(
+                    at: point,
+                    image: image,
+                    focusPoint: nil,
+                    detail: "visible camera snap"
+                )
+            } else {
+                self.showSnapshotPrankCard(
+                    at: point,
+                    image: self.screenSnapshot,
+                    focusPoint: self.snapshotFocusPoint(from: point),
+                    detail: "camera skipped"
+                )
+            }
+        }
+        snapshotPrankCamera = snapshotter
+        snapshotter.capture()
+    }
+
+    private func showSnapshotPrankCard(at point: NSPoint, image: NSImage?, focusPoint: NSPoint?, detail: String) {
+        let cardSize = NSSize(width: 270, height: 332)
+        let minX: CGFloat = 28
+        let maxX = max(minX, bounds.width - cardSize.width - 28)
+        let minY: CGFloat = 112
+        let maxY = max(minY, bounds.height - cardSize.height - 28)
+        let x = min(max(point.x - cardSize.width / 2 + 18, minX), maxX)
+        let y = min(max(point.y - cardSize.height / 2 + 28, minY), maxY)
+        let card = SnapshotPrankCardView(
+            image: image,
+            focusPoint: focusPoint,
+            timestamp: Date(),
+            detail: detail,
+            index: snapshotPrankCount
+        )
+        card.frame = NSRect(origin: NSPoint(x: x, y: y), size: cardSize)
+        card.frameCenterRotation = CGFloat((snapshotPrankCount % 5) - 2) * 2.6
+        addSubview(card, positioned: .above, relativeTo: nil)
+        snapshotPrankCards.append(card)
+        snapshotPrankCount += 1
+
+        while snapshotPrankCards.count > 4 {
+            snapshotPrankCards.removeFirst().removeFromSuperview()
+        }
+
+        NSSound(named: NSSound.Name("Pop"))?.play()
+    }
+
+    private func countdownFrame(near point: NSPoint) -> NSRect {
+        let size = NSSize(width: 360, height: 224)
+        let minX: CGFloat = 34
+        let maxX = max(minX, bounds.width - size.width - 34)
+        let minY: CGFloat = 130
+        let maxY = max(minY, bounds.height - size.height - 34)
+        let x = min(max(point.x - size.width / 2, minX), maxX)
+        let y = min(max(point.y - size.height / 2, minY), maxY)
+        return NSRect(origin: NSPoint(x: x, y: y), size: size)
+    }
+
+    private func snapshotFocusPoint(from point: NSPoint) -> NSPoint? {
+        guard let screenSnapshot else {
+            return nil
+        }
+
+        return NSPoint(
+            x: point.x / max(1, bounds.width) * screenSnapshot.size.width,
+            y: point.y / max(1, bounds.height) * screenSnapshot.size.height
+        )
     }
 
     private func setupNotePanel() {
@@ -1499,6 +1711,375 @@ private struct AwayoStickyNote {
     let message: String
     let colorIndex: Int
     let position: NSPoint
+}
+
+@MainActor
+private final class SnapshotPrankCardView: NSView {
+    private let image: NSImage?
+    private let focusPoint: NSPoint?
+    private let timestamp: Date
+    private let detail: String
+    private let index: Int
+
+    init(image: NSImage?, focusPoint: NSPoint?, timestamp: Date, detail: String, index: Int) {
+        self.image = image
+        self.focusPoint = focusPoint
+        self.timestamp = timestamp
+        self.detail = detail
+        self.index = index
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.shadowColor = NSColor.black.cgColor
+        layer?.shadowOpacity = 0.34
+        layer?.shadowRadius = 24
+        layer?.shadowOffset = NSSize(width: 0, height: -10)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        nil
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let card = bounds.insetBy(dx: 4, dy: 4)
+        let paper = NSBezierPath(roundedRect: card, xRadius: 6, yRadius: 6)
+        NSColor(calibratedRed: 0.96, green: 0.91, blue: 0.78, alpha: 0.98).setFill()
+        paper.fill()
+
+        NSColor(calibratedRed: 0.30, green: 0.20, blue: 0.10, alpha: 0.16).setStroke()
+        paper.lineWidth = 1
+        paper.stroke()
+
+        drawPaperFlecks(in: card)
+
+        let photoRect = NSRect(
+            x: card.minX + 18,
+            y: card.minY + 94,
+            width: card.width - 36,
+            height: card.height - 128
+        )
+        drawVintageSnapshot(in: photoRect)
+        drawStamp(in: photoRect)
+
+        drawText(
+            "NICE TRY!",
+            in: NSRect(x: card.minX + 18, y: card.minY + 42, width: card.width - 36, height: 34),
+            font: NSFont(name: "Copperplate-Bold", size: 25) ?? .systemFont(ofSize: 25, weight: .black),
+            color: NSColor(calibratedRed: 0.34, green: 0.15, blue: 0.08, alpha: 0.92)
+        )
+
+        let caption = "\(detail)  -  attempt \(String(format: "%02d", index + 1))  -  \(timestamp.formatted(date: .omitted, time: .shortened))"
+        drawText(
+            caption,
+            in: NSRect(x: card.minX + 18, y: card.minY + 22, width: card.width - 36, height: 16),
+            font: .monospacedSystemFont(ofSize: 9, weight: .semibold),
+            color: NSColor(calibratedRed: 0.34, green: 0.21, blue: 0.12, alpha: 0.62)
+        )
+    }
+
+    private func drawVintageSnapshot(in rect: NSRect) {
+        NSGraphicsContext.saveGraphicsState()
+        NSBezierPath(roundedRect: rect, xRadius: 3, yRadius: 3).addClip()
+
+        if let image {
+            let source = sourceRect(for: image.size, targetAspect: rect.width / max(1, rect.height))
+            image.draw(in: rect, from: source, operation: .sourceOver, fraction: 0.78)
+            NSColor(calibratedRed: 0.78, green: 0.56, blue: 0.22, alpha: 0.24).setFill()
+            rect.fill(using: .sourceAtop)
+        } else {
+            NSGradient(colors: [
+                NSColor(calibratedRed: 0.36, green: 0.31, blue: 0.24, alpha: 1),
+                NSColor(calibratedRed: 0.14, green: 0.12, blue: 0.10, alpha: 1)
+            ])?.draw(in: rect, angle: -35)
+        }
+
+        NSColor.black.withAlphaComponent(0.10).setFill()
+        rect.fill(using: .sourceAtop)
+
+        NSColor.white.withAlphaComponent(0.10).setStroke()
+        for line in 0..<9 {
+            let y = rect.minY + CGFloat(line) * rect.height / 8
+            let path = NSBezierPath()
+            path.move(to: NSPoint(x: rect.minX, y: y))
+            path.line(to: NSPoint(x: rect.maxX, y: y + CGFloat(line % 2 == 0 ? 1 : -1)))
+            path.lineWidth = 1
+            path.stroke()
+        }
+
+        NSGraphicsContext.restoreGraphicsState()
+
+        NSColor(calibratedRed: 0.22, green: 0.14, blue: 0.08, alpha: 0.32).setStroke()
+        let border = NSBezierPath(roundedRect: rect, xRadius: 3, yRadius: 3)
+        border.lineWidth = 1.5
+        border.stroke()
+    }
+
+    private func drawStamp(in rect: NSRect) {
+        let stamp = NSRect(x: rect.midX - 74, y: rect.midY - 24, width: 148, height: 48)
+
+        NSGraphicsContext.saveGraphicsState()
+        let transform = NSAffineTransform()
+        transform.translateX(by: stamp.midX, yBy: stamp.midY)
+        transform.rotate(byDegrees: -11)
+        transform.translateX(by: -stamp.midX, yBy: -stamp.midY)
+        transform.concat()
+
+        let path = NSBezierPath(roundedRect: stamp, xRadius: 4, yRadius: 4)
+        NSColor(calibratedRed: 0.64, green: 0.08, blue: 0.05, alpha: 0.18).setFill()
+        path.fill()
+        NSColor(calibratedRed: 0.70, green: 0.06, blue: 0.04, alpha: 0.70).setStroke()
+        path.lineWidth = 3
+        path.stroke()
+        drawText(
+            "NICE TRY!",
+            in: stamp.insetBy(dx: 7, dy: 12),
+            font: .monospacedSystemFont(ofSize: 20, weight: .black),
+            color: NSColor(calibratedRed: 0.72, green: 0.06, blue: 0.04, alpha: 0.78)
+        )
+
+        NSGraphicsContext.restoreGraphicsState()
+    }
+
+    private func drawPaperFlecks(in rect: NSRect) {
+        for fleck in 0..<38 {
+            let seed = CGFloat(fleck)
+            let x = rect.minX + unitNoise(seed * 9.1) * rect.width
+            let y = rect.minY + unitNoise(seed * 17.7) * rect.height
+            let size = CGFloat(0.8 + Double(fleck % 3) * 0.55)
+            NSColor(calibratedRed: 0.33, green: 0.21, blue: 0.12, alpha: 0.07).setFill()
+            NSBezierPath(ovalIn: NSRect(x: x, y: y, width: size, height: size)).fill()
+        }
+    }
+
+    private func sourceRect(for imageSize: NSSize, targetAspect: CGFloat) -> NSRect {
+        var width = min(imageSize.width, imageSize.height * targetAspect)
+        var height = width / max(0.01, targetAspect)
+
+        if height > imageSize.height {
+            height = imageSize.height
+            width = height * targetAspect
+        }
+
+        let focus = focusPoint ?? NSPoint(x: imageSize.width / 2, y: imageSize.height / 2)
+        let x = min(max(focus.x - width / 2, 0), max(0, imageSize.width - width))
+        let y = min(max(focus.y - height / 2, 0), max(0, imageSize.height - height))
+        return NSRect(x: x, y: y, width: width, height: height)
+    }
+
+    private func drawText(_ text: String, in rect: NSRect, font: NSFont, color: NSColor) {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+        text.draw(in: rect, withAttributes: [
+            .font: font,
+            .foregroundColor: color,
+            .paragraphStyle: paragraph
+        ])
+    }
+
+    private func unitNoise(_ value: CGFloat) -> CGFloat {
+        let raw = sin(value) * 43758.5453
+        return raw - floor(raw)
+    }
+}
+
+@MainActor
+private final class SnapshotPrankCountdownView: NSView {
+    var remainingSeconds = 3 {
+        didSet {
+            needsDisplay = true
+        }
+    }
+
+    var statusText = "visible camera snap" {
+        didSet {
+            needsDisplay = true
+        }
+    }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.shadowColor = NSColor.black.cgColor
+        layer?.shadowOpacity = 0.36
+        layer?.shadowRadius = 28
+        layer?.shadowOffset = NSSize(width: 0, height: -10)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        nil
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let card = bounds.insetBy(dx: 4, dy: 4)
+        let path = NSBezierPath(roundedRect: card, xRadius: 12, yRadius: 12)
+        NSColor(calibratedRed: 0.08, green: 0.06, blue: 0.05, alpha: 0.88).setFill()
+        path.fill()
+
+        NSColor(calibratedRed: 0.98, green: 0.85, blue: 0.52, alpha: 0.40).setStroke()
+        path.lineWidth = 1.5
+        path.stroke()
+
+        drawCameraIcon(in: NSRect(x: card.midX - 48, y: card.maxY - 84, width: 96, height: 56))
+
+        drawText(
+            "NICE TRY!",
+            in: NSRect(x: card.minX + 24, y: card.midY - 2, width: card.width - 48, height: 36),
+            font: NSFont(name: "Copperplate-Bold", size: 28) ?? .systemFont(ofSize: 28, weight: .black),
+            color: NSColor(calibratedRed: 1.0, green: 0.88, blue: 0.54, alpha: 0.96)
+        )
+
+        let countdown = remainingSeconds > 0 ? "\(remainingSeconds)" : "snap"
+        drawText(
+            "\(statusText) in \(countdown)",
+            in: NSRect(x: card.minX + 24, y: card.midY - 34, width: card.width - 48, height: 22),
+            font: .monospacedSystemFont(ofSize: 15, weight: .bold),
+            color: NSColor.white.withAlphaComponent(0.82)
+        )
+
+        drawText(
+            "camera snaps after this visible countdown",
+            in: NSRect(x: card.minX + 24, y: card.minY + 24, width: card.width - 48, height: 18),
+            font: .systemFont(ofSize: 11, weight: .semibold),
+            color: NSColor.white.withAlphaComponent(0.56)
+        )
+    }
+
+    private func drawCameraIcon(in rect: NSRect) {
+        NSColor(calibratedRed: 0.98, green: 0.85, blue: 0.52, alpha: 0.88).setFill()
+        NSBezierPath(roundedRect: NSRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height * 0.76), xRadius: 10, yRadius: 10).fill()
+        NSBezierPath(roundedRect: NSRect(x: rect.minX + 18, y: rect.maxY - 20, width: 34, height: 16), xRadius: 5, yRadius: 5).fill()
+
+        NSColor(calibratedRed: 0.12, green: 0.08, blue: 0.06, alpha: 0.92).setFill()
+        NSBezierPath(ovalIn: NSRect(x: rect.midX - 17, y: rect.minY + 7, width: 34, height: 34)).fill()
+        NSColor(calibratedRed: 0.98, green: 0.85, blue: 0.52, alpha: 0.92).setStroke()
+        let lens = NSBezierPath(ovalIn: NSRect(x: rect.midX - 24, y: rect.minY, width: 48, height: 48))
+        lens.lineWidth = 4
+        lens.stroke()
+
+        NSColor(calibratedRed: 0.96, green: 0.10, blue: 0.08, alpha: 0.95).setFill()
+        NSBezierPath(ovalIn: NSRect(x: rect.maxX - 20, y: rect.maxY - 22, width: 11, height: 11)).fill()
+    }
+
+    private func drawText(_ text: String, in rect: NSRect, font: NSFont, color: NSColor) {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+        text.draw(in: rect, withAttributes: [
+            .font: font,
+            .foregroundColor: color,
+            .paragraphStyle: paragraph
+        ])
+    }
+}
+
+private final class AwayoCameraSnapshotter: NSObject, AVCapturePhotoCaptureDelegate, @unchecked Sendable {
+    private let completion: @MainActor (NSImage?) -> Void
+    private let session = AVCaptureSession()
+    private let output = AVCapturePhotoOutput()
+    private let queue = DispatchQueue(label: "app.awayo.camera-snapshot")
+    private var capturedImage: NSImage?
+    private var didFinish = false
+
+    init(completion: @escaping @MainActor (NSImage?) -> Void) {
+        self.completion = completion
+        super.init()
+    }
+
+    func capture() {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            configureAndCapture()
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
+                guard let self else {
+                    return
+                }
+
+                if granted {
+                    self.configureAndCapture()
+                } else {
+                    self.finish(with: nil)
+                }
+            }
+        case .denied, .restricted:
+            finish(with: nil)
+        @unknown default:
+            finish(with: nil)
+        }
+    }
+
+    private func configureAndCapture() {
+        queue.async { [weak self] in
+            guard let self else {
+                return
+            }
+
+            self.session.beginConfiguration()
+            self.session.sessionPreset = .photo
+
+            guard
+                let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .unspecified)
+                    ?? AVCaptureDevice.default(for: .video),
+                let input = try? AVCaptureDeviceInput(device: device),
+                self.session.canAddInput(input),
+                self.session.canAddOutput(self.output)
+            else {
+                self.session.commitConfiguration()
+                self.finish(with: nil)
+                return
+            }
+
+            self.session.addInput(input)
+            self.session.addOutput(self.output)
+            self.session.commitConfiguration()
+            self.session.startRunning()
+
+            let settings = AVCapturePhotoSettings()
+            self.output.capturePhoto(with: settings, delegate: self)
+        }
+    }
+
+    func photoOutput(
+        _ output: AVCapturePhotoOutput,
+        didFinishProcessingPhoto photo: AVCapturePhoto,
+        error: Error?
+    ) {
+        guard error == nil, let data = photo.fileDataRepresentation() else {
+            capturedImage = nil
+            return
+        }
+
+        capturedImage = NSImage(data: data)
+    }
+
+    func photoOutput(
+        _ output: AVCapturePhotoOutput,
+        didFinishCaptureFor resolvedSettings: AVCaptureResolvedPhotoSettings,
+        error: Error?
+    ) {
+        finish(with: error == nil ? capturedImage : nil)
+    }
+
+    private func finish(with image: NSImage?) {
+        guard !didFinish else {
+            return
+        }
+
+        didFinish = true
+        if session.isRunning {
+            session.stopRunning()
+        }
+
+        DispatchQueue.main.async { [completion] in
+            completion(image)
+        }
+    }
 }
 
 @MainActor
