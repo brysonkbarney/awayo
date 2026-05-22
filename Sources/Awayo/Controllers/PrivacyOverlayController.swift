@@ -1,5 +1,6 @@
 import AppKit
 import CoreGraphics
+import Foundation
 
 @MainActor
 final class PrivacyOverlayController: NSObject {
@@ -195,11 +196,26 @@ final class PrivacyOverlayController: NSObject {
     }
 
     private static func captureScreenSnapshots() -> [CGDirectDisplayID: NSImage] {
-        var snapshots: [CGDirectDisplayID: NSImage] = [:]
-
-        if !CGPreflightScreenCaptureAccess() {
+        let preflightAllowed = CGPreflightScreenCaptureAccess()
+        if !preflightAllowed {
             _ = CGRequestScreenCaptureAccess()
         }
+
+        let coreGraphicsSnapshots = captureScreenSnapshotsWithCoreGraphics()
+        guard !preflightAllowed else {
+            return coreGraphicsSnapshots
+        }
+
+        var snapshots = captureScreenSnapshotsWithScreencapture()
+        coreGraphicsSnapshots.forEach { displayID, image in
+            snapshots[displayID] = snapshots[displayID] ?? image
+        }
+
+        return snapshots
+    }
+
+    private static func captureScreenSnapshotsWithCoreGraphics() -> [CGDirectDisplayID: NSImage] {
+        var snapshots: [CGDirectDisplayID: NSImage] = [:]
 
         NSScreen.screens.forEach { screen in
             guard
@@ -213,6 +229,92 @@ final class PrivacyOverlayController: NSObject {
         }
 
         return snapshots
+    }
+
+    private static func captureScreenSnapshotsWithScreencapture() -> [CGDirectDisplayID: NSImage] {
+        var snapshots: [CGDirectDisplayID: NSImage] = [:]
+        let screens = orderedScreensForScreencapture()
+        let temporaryDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "AwayoScreenSnapshots-\(UUID().uuidString)",
+            isDirectory: true
+        )
+
+        do {
+            try FileManager.default.createDirectory(
+                at: temporaryDirectory,
+                withIntermediateDirectories: true
+            )
+        } catch {
+            return snapshots
+        }
+
+        defer {
+            try? FileManager.default.removeItem(at: temporaryDirectory)
+        }
+
+        for (index, screen) in screens.enumerated() {
+            guard let displayID = displayID(for: screen) else {
+                continue
+            }
+
+            let imageURL = temporaryDirectory.appendingPathComponent("display-\(index + 1).png")
+            guard runScreencapture(displayNumber: index + 1, outputURL: imageURL),
+                  let image = NSImage(contentsOf: imageURL) else {
+                continue
+            }
+
+            snapshots[displayID] = image
+        }
+
+        return snapshots
+    }
+
+    private static func orderedScreensForScreencapture() -> [NSScreen] {
+        let screens = NSScreen.screens
+        guard let mainScreen = NSScreen.main else {
+            return screens
+        }
+
+        let otherScreens = screens
+            .filter { $0 != mainScreen }
+            .sorted {
+                if $0.frame.minX == $1.frame.minX {
+                    return $0.frame.minY < $1.frame.minY
+                }
+
+                return $0.frame.minX < $1.frame.minX
+            }
+
+        return [mainScreen] + otherScreens
+    }
+
+    private static func runScreencapture(displayNumber: Int, outputURL: URL) -> Bool {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+        process.arguments = [
+            "-x",
+            "-t",
+            "png",
+            "-D\(displayNumber)",
+            outputURL.path
+        ]
+
+        do {
+            try process.run()
+            let timeout = DispatchSemaphore(value: 0)
+            process.terminationHandler = { _ in
+                timeout.signal()
+            }
+
+            guard timeout.wait(timeout: .now() + 2.0) == .success else {
+                process.terminate()
+                return false
+            }
+
+            return process.terminationStatus == 0
+        } catch {
+            return false
+        }
     }
 
     private static func displayID(for screen: NSScreen) -> CGDirectDisplayID? {
