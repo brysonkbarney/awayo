@@ -1,4 +1,5 @@
 import AppKit
+import CoreGraphics
 import Foundation
 
 @MainActor
@@ -165,6 +166,11 @@ final class AwayoController: NSObject {
             return
         }
 
+        let appearance = settingsStore.appearance()
+        guard ensureScreenSnapshotPermissionIfNeeded(for: appearance) else {
+            return
+        }
+
         let message = settingsStore.lockMessage()
         guard startSession(mode: .privacy, duration: duration, message: message) else {
             return
@@ -177,7 +183,7 @@ final class AwayoController: NSObject {
         privacyOverlay.show(
             message: message,
             endDate: session.endDate,
-            appearance: settingsStore.appearance(),
+            appearance: appearance,
             verifyPasscode: { [passcodeStore] passcode in
                 passcodeStore.verify(passcode)
             }
@@ -329,6 +335,27 @@ final class AwayoController: NSObject {
         }
 
         showSettings(onboarding: true)
+        return false
+    }
+
+    private func ensureScreenSnapshotPermissionIfNeeded(for appearance: AwayoAppearance) -> Bool {
+        guard appearance.backgroundStyle == .screenSnapshot else {
+            return true
+        }
+
+        if CGPreflightScreenCaptureAccess() {
+            return true
+        }
+
+        if CGRequestScreenCaptureAccess(), CGPreflightScreenCaptureAccess() {
+            return true
+        }
+
+        showError("""
+        Screen Snapshot needs Screen Recording permission to capture your actual open windows.
+
+        Open System Settings > Privacy & Security > Screen Recording, allow Awayo, then quit and reopen Awayo.
+        """)
         return false
     }
 

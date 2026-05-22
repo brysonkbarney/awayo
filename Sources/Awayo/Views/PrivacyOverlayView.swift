@@ -1,5 +1,6 @@
 import AppKit
 @preconcurrency import AVFoundation
+import CoreImage
 
 @MainActor
 final class PrivacyOverlayView: NSView {
@@ -568,12 +569,7 @@ final class PrivacyOverlayView: NSView {
                     detail: "visible camera snap"
                 )
             } else {
-                self.showSnapshotPrankCard(
-                    at: point,
-                    image: self.screenSnapshot,
-                    focusPoint: self.snapshotFocusPoint(from: point),
-                    detail: "camera skipped"
-                )
+                NSSound.beep()
             }
         }
         snapshotPrankCamera = snapshotter
@@ -581,13 +577,16 @@ final class PrivacyOverlayView: NSView {
     }
 
     private func showSnapshotPrankCard(at point: NSPoint, image: NSImage?, focusPoint: NSPoint?, detail: String) {
-        let cardSize = NSSize(width: 270, height: 332)
+        let cardSize = NSSize(width: 232, height: 286)
         let minX: CGFloat = 28
         let maxX = max(minX, bounds.width - cardSize.width - 28)
         let minY: CGFloat = 112
         let maxY = max(minY, bounds.height - cardSize.height - 28)
         let x = min(max(point.x - cardSize.width / 2 + 18, minX), maxX)
         let y = min(max(point.y - cardSize.height / 2 + 28, minY), maxY)
+        snapshotPrankCards.forEach { $0.removeFromSuperview() }
+        snapshotPrankCards.removeAll()
+
         let card = SnapshotPrankCardView(
             image: image,
             focusPoint: focusPoint,
@@ -600,10 +599,6 @@ final class PrivacyOverlayView: NSView {
         addSubview(card, positioned: .above, relativeTo: nil)
         snapshotPrankCards.append(card)
         snapshotPrankCount += 1
-
-        while snapshotPrankCards.count > 4 {
-            snapshotPrankCards.removeFirst().removeFromSuperview()
-        }
 
         NSSound(named: NSSound.Name("Pop"))?.play()
     }
@@ -1978,12 +1973,12 @@ private final class SnapshotPrankCountdownView: NSView {
     }
 }
 
-private final class AwayoCameraSnapshotter: NSObject, AVCapturePhotoCaptureDelegate, @unchecked Sendable {
+private final class AwayoCameraSnapshotter: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable {
     private let completion: @MainActor (NSImage?) -> Void
     private let session = AVCaptureSession()
-    private let output = AVCapturePhotoOutput()
+    private let output = AVCaptureVideoDataOutput()
     private let queue = DispatchQueue(label: "app.awayo.camera-snapshot")
-    private var capturedImage: NSImage?
+    private let ciContext = CIContext()
     private var didFinish = false
 
     init(completion: @escaping @MainActor (NSImage?) -> Void) {
@@ -2021,7 +2016,7 @@ private final class AwayoCameraSnapshotter: NSObject, AVCapturePhotoCaptureDeleg
             }
 
             self.session.beginConfiguration()
-            self.session.sessionPreset = .photo
+            self.session.sessionPreset = .medium
 
             guard
                 let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .unspecified)
@@ -2035,35 +2030,44 @@ private final class AwayoCameraSnapshotter: NSObject, AVCapturePhotoCaptureDeleg
                 return
             }
 
+            self.output.videoSettings = [
+                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
+            ]
+            self.output.alwaysDiscardsLateVideoFrames = true
+            self.output.setSampleBufferDelegate(self, queue: self.queue)
+
             self.session.addInput(input)
             self.session.addOutput(self.output)
             self.session.commitConfiguration()
             self.session.startRunning()
 
-            let settings = AVCapturePhotoSettings()
-            self.output.capturePhoto(with: settings, delegate: self)
+            self.queue.asyncAfter(deadline: .now() + 4) { [weak self] in
+                self?.finish(with: nil)
+            }
         }
     }
 
-    func photoOutput(
-        _ output: AVCapturePhotoOutput,
-        didFinishProcessingPhoto photo: AVCapturePhoto,
-        error: Error?
+    func captureOutput(
+        _ output: AVCaptureOutput,
+        didOutput sampleBuffer: CMSampleBuffer,
+        from connection: AVCaptureConnection
     ) {
-        guard error == nil, let data = photo.fileDataRepresentation() else {
-            capturedImage = nil
+        guard !didFinish, let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
             return
         }
 
-        capturedImage = NSImage(data: data)
-    }
+        if connection.isVideoMirroringSupported {
+            connection.isVideoMirrored = true
+        }
 
-    func photoOutput(
-        _ output: AVCapturePhotoOutput,
-        didFinishCaptureFor resolvedSettings: AVCaptureResolvedPhotoSettings,
-        error: Error?
-    ) {
-        finish(with: error == nil ? capturedImage : nil)
+        let ciImage = CIImage(cvPixelBuffer: imageBuffer)
+        guard let cgImage = ciContext.createCGImage(ciImage, from: ciImage.extent) else {
+            finish(with: nil)
+            return
+        }
+
+        let image = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+        finish(with: image)
     }
 
     private func finish(with image: NSImage?) {
