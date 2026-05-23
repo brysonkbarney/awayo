@@ -1981,7 +1981,7 @@ private final class AwayoCameraSnapshotter: NSObject, AVCaptureVideoDataOutputSa
     private let completion: @MainActor (NSImage?) -> Void
     private let session = AVCaptureSession()
     private let output = AVCaptureVideoDataOutput()
-    private let queue = DispatchQueue(label: "app.awayo.camera-snapshot")
+    private let queue = DispatchQueue(label: "app.awayo.camera-snapshot", qos: .userInitiated)
     private let ciContext = CIContext()
     private var didFinish = false
 
@@ -2034,9 +2034,6 @@ private final class AwayoCameraSnapshotter: NSObject, AVCaptureVideoDataOutputSa
                 return
             }
 
-            self.output.videoSettings = [
-                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
-            ]
             self.output.alwaysDiscardsLateVideoFrames = true
             self.output.setSampleBufferDelegate(self, queue: self.queue)
 
@@ -2045,7 +2042,7 @@ private final class AwayoCameraSnapshotter: NSObject, AVCaptureVideoDataOutputSa
             self.session.commitConfiguration()
             self.session.startRunning()
 
-            self.queue.asyncAfter(deadline: .now() + 4) { [weak self] in
+            self.queue.asyncAfter(deadline: .now() + 6) { [weak self] in
                 self?.finish(with: nil)
             }
         }
@@ -2054,23 +2051,21 @@ private final class AwayoCameraSnapshotter: NSObject, AVCaptureVideoDataOutputSa
     func captureOutput(
         _ output: AVCaptureOutput,
         didOutput sampleBuffer: CMSampleBuffer,
-        from connection: AVCaptureConnection
+        from _: AVCaptureConnection
     ) {
         guard !didFinish, let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
             return
         }
 
-        if connection.isVideoMirroringSupported {
-            connection.isVideoMirrored = true
-        }
-
-        let ciImage = CIImage(cvPixelBuffer: imageBuffer)
+        let ciImage = CIImage(cvImageBuffer: imageBuffer)
         guard let cgImage = ciContext.createCGImage(ciImage, from: ciImage.extent) else {
             finish(with: nil)
             return
         }
 
-        let image = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+        let bitmap = NSBitmapImageRep(cgImage: cgImage)
+        let image = NSImage(size: NSSize(width: cgImage.width, height: cgImage.height))
+        image.addRepresentation(bitmap)
         finish(with: image)
     }
 
@@ -2080,13 +2075,17 @@ private final class AwayoCameraSnapshotter: NSObject, AVCaptureVideoDataOutputSa
         }
 
         didFinish = true
-        if session.isRunning {
-            session.stopRunning()
-        }
+        output.setSampleBufferDelegate(nil, queue: nil)
 
         let result = SnapshotResult(image: image)
         DispatchQueue.main.async { [completion, result] in
             completion(result.image)
+        }
+
+        queue.async { [session] in
+            if session.isRunning {
+                session.stopRunning()
+            }
         }
     }
 }
