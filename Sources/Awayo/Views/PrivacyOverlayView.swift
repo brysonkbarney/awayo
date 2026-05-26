@@ -44,6 +44,7 @@ final class PrivacyOverlayView: NSView {
     private var snapshotPrankCamera: AwayoCameraSnapshotter?
     private var snapshotPrankPendingPoint = NSPoint.zero
     private var snapshotPrankRemainingSeconds = 3
+    private var snapshotPrankGeneration = 0
     private weak var snapshotUnlockPanel: NSView?
     private var style: AwayoLockStyle {
         awayoAppearance.backgroundStyle
@@ -475,6 +476,11 @@ final class PrivacyOverlayView: NSView {
 
         let point = convert(event.locationInWindow, from: nil)
         updateSnapshotUnlockVisibility(at: point)
+        if point.y <= 112 || isTypingInUnlockField {
+            cancelSnapshotPrank()
+            return
+        }
+
         showSnapshotPrankIfNeeded(at: point, timestamp: event.timestamp)
     }
 
@@ -518,6 +524,7 @@ final class PrivacyOverlayView: NSView {
 
     private func beginSnapshotPrank(at point: NSPoint) {
         snapshotPrankInProgress = true
+        snapshotPrankGeneration += 1
         snapshotPrankCountdownTimer?.invalidate()
 
         let countdownView = SnapshotPrankCountdownView()
@@ -526,7 +533,7 @@ final class PrivacyOverlayView: NSView {
         snapshotPrankCountdownView = countdownView
 
         snapshotPrankPendingPoint = point
-        snapshotPrankRemainingSeconds = 3
+        snapshotPrankRemainingSeconds = 2
         countdownView.remainingSeconds = snapshotPrankRemainingSeconds
         NSSound(named: NSSound.Name("Tink"))?.play()
 
@@ -555,8 +562,13 @@ final class PrivacyOverlayView: NSView {
     }
 
     private func captureSnapshotPrank(at point: NSPoint) {
+        let generation = snapshotPrankGeneration
         let snapshotter = AwayoCameraSnapshotter { [weak self] image in
             guard let self else {
+                return
+            }
+
+            guard generation == self.snapshotPrankGeneration else {
                 return
             }
 
@@ -588,8 +600,6 @@ final class PrivacyOverlayView: NSView {
         let maxY = max(minY, bounds.height - cardSize.height - 28)
         let x = min(max(point.x - cardSize.width / 2 + 18, minX), maxX)
         let y = min(max(point.y - cardSize.height / 2 + 28, minY), maxY)
-        snapshotPrankCards.forEach { $0.removeFromSuperview() }
-        snapshotPrankCards.removeAll()
 
         let card = SnapshotPrankCardView(
             image: image,
@@ -604,11 +614,15 @@ final class PrivacyOverlayView: NSView {
         snapshotPrankCards.append(card)
         snapshotPrankCount += 1
 
+        while snapshotPrankCards.count > 6 {
+            snapshotPrankCards.removeFirst().removeFromSuperview()
+        }
+
         NSSound(named: NSSound.Name("Pop"))?.play()
     }
 
     private func countdownFrame(near point: NSPoint) -> NSRect {
-        let size = NSSize(width: 360, height: 224)
+        let size = NSSize(width: 248, height: 124)
         let minX: CGFloat = 34
         let maxX = max(minX, bounds.width - size.width - 34)
         let minY: CGFloat = 130
@@ -616,6 +630,20 @@ final class PrivacyOverlayView: NSView {
         let x = min(max(point.x - size.width / 2, minX), maxX)
         let y = min(max(point.y - size.height / 2, minY), maxY)
         return NSRect(origin: NSPoint(x: x, y: y), size: size)
+    }
+
+    private func cancelSnapshotPrank() {
+        guard snapshotPrankInProgress || snapshotPrankCountdownView != nil || snapshotPrankCamera != nil else {
+            return
+        }
+
+        snapshotPrankGeneration += 1
+        snapshotPrankCountdownTimer?.invalidate()
+        snapshotPrankCountdownTimer = nil
+        snapshotPrankCountdownView?.removeFromSuperview()
+        snapshotPrankCountdownView = nil
+        snapshotPrankCamera = nil
+        snapshotPrankInProgress = false
     }
 
     private func snapshotFocusPoint(from point: NSPoint) -> NSPoint? {
@@ -1755,10 +1783,10 @@ private final class SnapshotPrankCardView: NSView {
         drawPaperFlecks(in: card)
 
         let photoRect = NSRect(
-            x: card.minX + 18,
-            y: card.minY + 94,
-            width: card.width - 36,
-            height: card.height - 128
+            x: card.minX + 14,
+            y: card.minY + 88,
+            width: card.width - 28,
+            height: card.height - 116
         )
         drawVintageSnapshot(in: photoRect)
         drawStamp(in: photoRect)
@@ -1770,12 +1798,12 @@ private final class SnapshotPrankCardView: NSView {
             color: NSColor(calibratedRed: 0.34, green: 0.15, blue: 0.08, alpha: 0.92)
         )
 
-        let caption = "\(detail)  -  attempt \(String(format: "%02d", index + 1))  -  \(timestamp.formatted(date: .omitted, time: .shortened))"
+        let caption = "attempt \(String(format: "%02d", index + 1))  -  \(timestamp.formatted(date: .omitted, time: .shortened))"
         drawText(
             caption,
-            in: NSRect(x: card.minX + 18, y: card.minY + 22, width: card.width - 36, height: 16),
-            font: .monospacedSystemFont(ofSize: 9, weight: .semibold),
-            color: NSColor(calibratedRed: 0.34, green: 0.21, blue: 0.12, alpha: 0.62)
+            in: NSRect(x: card.minX + 18, y: card.minY + 21, width: card.width - 36, height: 18),
+            font: .monospacedSystemFont(ofSize: 10, weight: .bold),
+            color: NSColor(calibratedRed: 0.30, green: 0.17, blue: 0.08, alpha: 0.82)
         )
     }
 
@@ -1785,8 +1813,8 @@ private final class SnapshotPrankCardView: NSView {
 
         if let image {
             let source = sourceRect(for: image.size, targetAspect: rect.width / max(1, rect.height))
-            image.draw(in: rect, from: source, operation: .sourceOver, fraction: 0.78)
-            NSColor(calibratedRed: 0.78, green: 0.56, blue: 0.22, alpha: 0.24).setFill()
+            image.draw(in: rect, from: source, operation: .sourceOver, fraction: 0.96)
+            NSColor(calibratedRed: 0.78, green: 0.56, blue: 0.22, alpha: 0.09).setFill()
             rect.fill(using: .sourceAtop)
         } else {
             NSGradient(colors: [
@@ -1795,10 +1823,10 @@ private final class SnapshotPrankCardView: NSView {
             ])?.draw(in: rect, angle: -35)
         }
 
-        NSColor.black.withAlphaComponent(0.10).setFill()
+        NSColor.black.withAlphaComponent(0.03).setFill()
         rect.fill(using: .sourceAtop)
 
-        NSColor.white.withAlphaComponent(0.10).setStroke()
+        NSColor.white.withAlphaComponent(0.06).setStroke()
         for line in 0..<9 {
             let y = rect.minY + CGFloat(line) * rect.height / 8
             let path = NSBezierPath()
@@ -1817,7 +1845,7 @@ private final class SnapshotPrankCardView: NSView {
     }
 
     private func drawStamp(in rect: NSRect) {
-        let stamp = NSRect(x: rect.midX - 74, y: rect.midY - 24, width: 148, height: 48)
+        let stamp = NSRect(x: rect.maxX - 124, y: rect.minY + 12, width: 108, height: 34)
 
         NSGraphicsContext.saveGraphicsState()
         let transform = NSAffineTransform()
@@ -1827,16 +1855,16 @@ private final class SnapshotPrankCardView: NSView {
         transform.concat()
 
         let path = NSBezierPath(roundedRect: stamp, xRadius: 4, yRadius: 4)
-        NSColor(calibratedRed: 0.64, green: 0.08, blue: 0.05, alpha: 0.18).setFill()
+        NSColor(calibratedRed: 0.64, green: 0.08, blue: 0.05, alpha: 0.08).setFill()
         path.fill()
-        NSColor(calibratedRed: 0.70, green: 0.06, blue: 0.04, alpha: 0.70).setStroke()
-        path.lineWidth = 3
+        NSColor(calibratedRed: 0.70, green: 0.06, blue: 0.04, alpha: 0.74).setStroke()
+        path.lineWidth = 2
         path.stroke()
         drawText(
             "NICE TRY!",
-            in: stamp.insetBy(dx: 7, dy: 12),
-            font: .monospacedSystemFont(ofSize: 20, weight: .black),
-            color: NSColor(calibratedRed: 0.72, green: 0.06, blue: 0.04, alpha: 0.78)
+            in: stamp.insetBy(dx: 6, dy: 8),
+            font: .monospacedSystemFont(ofSize: 14, weight: .black),
+            color: NSColor(calibratedRed: 0.72, green: 0.06, blue: 0.04, alpha: 0.82)
         )
 
         NSGraphicsContext.restoreGraphicsState()
@@ -1918,35 +1946,28 @@ private final class SnapshotPrankCountdownView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         let card = bounds.insetBy(dx: 4, dy: 4)
         let path = NSBezierPath(roundedRect: card, xRadius: 12, yRadius: 12)
-        NSColor(calibratedRed: 0.08, green: 0.06, blue: 0.05, alpha: 0.88).setFill()
+        NSColor(calibratedRed: 0.08, green: 0.06, blue: 0.05, alpha: 0.68).setFill()
         path.fill()
 
-        NSColor(calibratedRed: 0.98, green: 0.85, blue: 0.52, alpha: 0.40).setStroke()
-        path.lineWidth = 1.5
+        NSColor(calibratedRed: 0.98, green: 0.85, blue: 0.52, alpha: 0.28).setStroke()
+        path.lineWidth = 1
         path.stroke()
 
-        drawCameraIcon(in: NSRect(x: card.midX - 48, y: card.maxY - 84, width: 96, height: 56))
+        drawCameraIcon(in: NSRect(x: card.minX + 18, y: card.midY - 16, width: 54, height: 34))
 
         drawText(
-            "NICE TRY!",
-            in: NSRect(x: card.minX + 24, y: card.midY - 2, width: card.width - 48, height: 36),
-            font: NSFont(name: "Copperplate-Bold", size: 28) ?? .systemFont(ofSize: 28, weight: .black),
-            color: NSColor(calibratedRed: 1.0, green: 0.88, blue: 0.54, alpha: 0.96)
+            "nice try",
+            in: NSRect(x: card.minX + 82, y: card.midY + 2, width: card.width - 104, height: 24),
+            font: .systemFont(ofSize: 17, weight: .black),
+            color: NSColor(calibratedRed: 1.0, green: 0.88, blue: 0.54, alpha: 0.84)
         )
 
         let countdown = remainingSeconds > 0 ? "\(remainingSeconds)" : "snap"
         drawText(
-            "\(statusText) in \(countdown)",
-            in: NSRect(x: card.minX + 24, y: card.midY - 34, width: card.width - 48, height: 22),
-            font: .monospacedSystemFont(ofSize: 15, weight: .bold),
-            color: NSColor.white.withAlphaComponent(0.82)
-        )
-
-        drawText(
-            "camera snaps after this visible countdown",
-            in: NSRect(x: card.minX + 24, y: card.minY + 24, width: card.width - 48, height: 18),
-            font: .systemFont(ofSize: 11, weight: .semibold),
-            color: NSColor.white.withAlphaComponent(0.56)
+            countdown,
+            in: NSRect(x: card.minX + 82, y: card.midY - 24, width: card.width - 104, height: 24),
+            font: .monospacedSystemFont(ofSize: 16, weight: .heavy),
+            color: NSColor.white.withAlphaComponent(0.72)
         )
     }
 

@@ -1,4 +1,6 @@
 import AppKit
+@preconcurrency import AVFoundation
+import CoreGraphics
 
 @MainActor
 final class AwayoSettingsWindowController: NSWindowController {
@@ -449,8 +451,13 @@ final class AwayoSettingsWindowController: NSWindowController {
     }
 
     @objc private func cameraGagToggled(_ sender: NSButton) {
-        settingsStore.saveCameraGagEnabled(sender.state == .on)
-        refreshCameraGagControls()
+        guard sender.state == .on else {
+            settingsStore.saveCameraGagEnabled(false)
+            refreshCameraGagControls()
+            return
+        }
+
+        requestCameraPermissionThenEnableGag()
     }
 
     @objc private func selectTile(_ sender: AwayoPreviewTile) {
@@ -460,6 +467,8 @@ final class AwayoSettingsWindowController: NSWindowController {
                 settingsStore.saveBackgroundStyle(value)
                 if value == .solidColor {
                     showSolidColorPanel()
+                } else if value == .screenSnapshot {
+                    requestScreenSnapshotPermission()
                 }
             }
         case .timer:
@@ -477,6 +486,45 @@ final class AwayoSettingsWindowController: NSWindowController {
         }
 
         refreshSelections()
+    }
+
+    private func requestCameraPermissionThenEnableGag() {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            settingsStore.saveCameraGagEnabled(true)
+            refreshCameraGagControls()
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
+                Task { @MainActor [weak self] in
+                    guard let self else {
+                        return
+                    }
+
+                    self.settingsStore.saveCameraGagEnabled(granted)
+                    self.refreshCameraGagControls()
+                    if !granted {
+                        self.showError("Camera access was not granted, so the NICE TRY camera snap stayed off.")
+                    }
+                }
+            }
+        case .denied, .restricted:
+            settingsStore.saveCameraGagEnabled(false)
+            refreshCameraGagControls()
+            showError("Camera access is off for Awayo. Enable it in System Settings > Privacy & Security > Camera, then turn this setting on again.")
+        @unknown default:
+            settingsStore.saveCameraGagEnabled(false)
+            refreshCameraGagControls()
+        }
+    }
+
+    private func requestScreenSnapshotPermission() {
+        guard !CGPreflightScreenCaptureAccess() else {
+            return
+        }
+
+        if !CGRequestScreenCaptureAccess() {
+            showError("Screen Snapshot needs Screen Recording permission. macOS may ask now; if it asks you to reopen Awayo, quit and open Awayo once.")
+        }
     }
 
     @objc private func chooseSolidBackgroundColor() {
