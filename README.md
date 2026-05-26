@@ -13,10 +13,9 @@ It is built for the half-open laptop era: a CLI agent, build, download, test sui
 - Pick from multiple Awayo Lock scenes and quiet patterns, including Duck Pond, Offline Runner, Screen Snapshot, and custom colors.
 - Let visitors leave sticky notes on the Awayo Lock screen without unlocking the Mac, or turn notes off entirely.
 - Optionally enable a Screen Snapshot NICE TRY camera countdown and Polaroid-style card.
-- Start a native macOS Lock Screen while keeping background work awake.
 - Run entirely from the menu bar.
 
-**Awayo Lock** covers your screen; it is not the macOS Lock Screen. For full security, use **macOS Lock + Keep Awake**.
+**Awayo Lock** covers your screen; it is not the macOS Lock Screen.
 
 Awayo Lock creates an overlay on every connected display, keeps those overlays above normal and full-screen windows, and reasserts itself when macOS Spaces change. It also blocks common keyboard shortcuts and swipe/scroll gestures while Awayo Lock is active, while still allowing passcode entry.
 

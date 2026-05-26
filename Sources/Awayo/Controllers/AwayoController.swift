@@ -81,16 +81,6 @@ final class AwayoController: NSObject {
         menu.addItem(awakeItem)
         menu.setSubmenu(awakeMenu, for: awakeItem)
 
-        let lockMenu = NSMenu(title: "macOS Lock + Keep Awake")
-        addDurationItems(
-            to: lockMenu,
-            action: #selector(startLockScreenFromMenu(_:)),
-            suffix: ""
-        )
-        let lockItem = submenuItem(title: "macOS Lock + Keep Awake", symbol: "lock.display")
-        menu.addItem(lockItem)
-        menu.setSubmenu(lockMenu, for: lockItem)
-
         menu.addItem(NSMenuItem.separator())
         menu.addItem(menuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ",", symbol: "gearshape"))
         menu.addItem(menuItem(title: "Custom Duration...", action: #selector(startCustomDuration), symbol: "timer"))
@@ -146,18 +136,6 @@ final class AwayoController: NSObject {
         startSession(mode: .awake, duration: duration(from: sender), message: "Keeping your agents alive")
     }
 
-    @objc private func startLockScreenFromMenu(_ sender: NSMenuItem) {
-        guard startSession(mode: .locked, duration: duration(from: sender), message: "Keeping your agents alive") else {
-            return
-        }
-
-        do {
-            try LockScreenController.lock()
-        } catch {
-            showError(error.localizedDescription)
-        }
-    }
-
     @objc private func startPrivacyCoverFromMenu(_ sender: NSMenuItem) {
         let duration = duration(from: sender)
 
@@ -199,11 +177,10 @@ final class AwayoController: NSObject {
         alert.accessoryView = durationField
         alert.addButton(withTitle: "Awayo Lock")
         alert.addButton(withTitle: "Keep Awake")
-        alert.addButton(withTitle: "macOS Lock")
         alert.addButton(withTitle: "Cancel")
 
         let response = alert.runModal()
-        guard response.rawValue != NSApplication.ModalResponse.alertFirstButtonReturn.rawValue + 3 else {
+        guard response.rawValue != NSApplication.ModalResponse.alertFirstButtonReturn.rawValue + 2 else {
             return
         }
 
@@ -217,8 +194,6 @@ final class AwayoController: NSObject {
             startPrivacyCoverFromMenu(fakeSender)
         case NSApplication.ModalResponse.alertSecondButtonReturn.rawValue:
             startKeepAwakeFromMenu(fakeSender)
-        case NSApplication.ModalResponse.alertThirdButtonReturn.rawValue:
-            startLockScreenFromMenu(fakeSender)
         default:
             break
         }
@@ -248,7 +223,7 @@ final class AwayoController: NSObject {
 
         Keep your Mac awake behind Awayo Lock. It covers your displays with a passcode screen while agents, scripts, and long-running tasks keep going.
 
-        Awayo Lock covers your screen; it is not the macOS Lock Screen. For full security, use macOS Lock + Keep Awake.
+        Awayo Lock covers your screen; it is not the macOS Lock Screen.
         """
         alert.alertStyle = .informational
         alert.addButton(withTitle: "OK")

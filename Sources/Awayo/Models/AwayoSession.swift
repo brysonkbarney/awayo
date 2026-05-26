@@ -4,7 +4,6 @@ struct AwayoSession {
     enum Mode {
         case awake
         case privacy
-        case locked
 
         var title: String {
             switch self {
@@ -12,8 +11,6 @@ struct AwayoSession {
                 "Awake"
             case .privacy:
                 "Awayo Lock"
-            case .locked:
-                "Locked"
             }
         }
     }
