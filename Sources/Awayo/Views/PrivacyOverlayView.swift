@@ -500,6 +500,10 @@ final class PrivacyOverlayView: NSView {
             return
         }
 
+        guard awayoAppearance.cameraGagEnabled else {
+            return
+        }
+
         guard bounds.contains(point), point.y > 112 else {
             return
         }

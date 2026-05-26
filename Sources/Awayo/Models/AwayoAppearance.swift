@@ -6,13 +6,15 @@ struct AwayoAppearance {
     var timerStyle: AwayoTimerStyle
     var dashboardStyle: AwayoDashboardStyle
     var noteStyle: AwayoNoteStyle
+    var cameraGagEnabled: Bool
 
     static let fallback = AwayoAppearance(
         backgroundStyle: .duckPond,
         solidBackgroundColor: .defaultSolidBackground,
         timerStyle: .heroCountdown,
         dashboardStyle: .centerStage,
-        noteStyle: .tapedPaper
+        noteStyle: .tapedPaper,
+        cameraGagEnabled: false
     )
 }
 

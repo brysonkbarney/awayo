@@ -24,6 +24,7 @@ final class AwayoSettingsWindowController: NSWindowController {
     private let passcodeButton = NSButton(title: "Set Passcode", target: nil, action: nil)
     private let awayNoteToggle = NSButton(checkboxWithTitle: "Show away note", target: nil, action: nil)
     private let awayNoteField = NSTextField(string: "")
+    private let cameraGagToggle = NSButton(checkboxWithTitle: "Enable NICE TRY camera snap", target: nil, action: nil)
     private var modalButtonTargets: [ModalButtonTarget] = []
     private var onboarding = false
 
@@ -62,6 +63,7 @@ final class AwayoSettingsWindowController: NSWindowController {
         refreshSelections()
         refreshPasscodeStatus()
         refreshAwayNoteControls()
+        refreshCameraGagControls()
         showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -107,6 +109,7 @@ final class AwayoSettingsWindowController: NSWindowController {
         content.addArrangedSubview(headerView())
         content.addArrangedSubview(passcodeSection())
         content.addArrangedSubview(awayNoteSection())
+        content.addArrangedSubview(cameraGagSection())
         content.addArrangedSubview(sectionTitle("Backgrounds", "Pick the scene or quiet pattern Awayo Lock uses every time it starts."))
         content.addArrangedSubview(tileGrid(for: .background))
         content.addArrangedSubview(customColorControl())
@@ -256,6 +259,67 @@ final class AwayoSettingsWindowController: NSWindowController {
         return card
     }
 
+    private func cameraGagSection() -> NSView {
+        let card = cardView()
+
+        let row = NSStackView()
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 18
+        row.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(row)
+
+        let icon = NSTextField(labelWithString: "!")
+        icon.font = .monospacedSystemFont(ofSize: 30, weight: .black)
+        icon.alignment = .center
+        icon.textColor = NSColor(calibratedRed: 0.22, green: 0.08, blue: 0.04, alpha: 1)
+        icon.wantsLayer = true
+        icon.layer?.backgroundColor = NSColor(calibratedRed: 1.0, green: 0.78, blue: 0.42, alpha: 1).cgColor
+        icon.layer?.cornerRadius = 18
+        icon.translatesAutoresizingMaskIntoConstraints = false
+
+        let copy = NSStackView()
+        copy.orientation = .vertical
+        copy.alignment = .leading
+        copy.spacing = 4
+
+        let title = NSTextField(labelWithString: "Screen Snapshot Camera Gag")
+        title.font = .systemFont(ofSize: 17, weight: .bold)
+        title.textColor = .labelColor
+
+        let subtitle = NSTextField(labelWithString: "Optional. When enabled, moving around in Screen Snapshot mode shows a visible countdown and then tries to pin a NICE TRY camera photo.")
+        subtitle.font = .systemFont(ofSize: 13, weight: .medium)
+        subtitle.textColor = .secondaryLabelColor
+        subtitle.maximumNumberOfLines = 2
+        subtitle.preferredMaxLayoutWidth = 650
+
+        cameraGagToggle.target = self
+        cameraGagToggle.action = #selector(cameraGagToggled(_:))
+        cameraGagToggle.font = .systemFont(ofSize: 13, weight: .semibold)
+
+        copy.addArrangedSubview(title)
+        copy.addArrangedSubview(subtitle)
+
+        row.addArrangedSubview(icon)
+        row.addArrangedSubview(copy)
+        row.addArrangedSubview(NSView())
+        row.addArrangedSubview(cameraGagToggle)
+
+        NSLayoutConstraint.activate([
+            icon.widthAnchor.constraint(equalToConstant: 58),
+            icon.heightAnchor.constraint(equalToConstant: 58),
+
+            row.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 18),
+            row.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -18),
+            row.topAnchor.constraint(equalTo: card.topAnchor, constant: 18),
+            row.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -18),
+            card.widthAnchor.constraint(equalToConstant: 940)
+        ])
+
+        refreshCameraGagControls()
+        return card
+    }
+
     private func sectionTitle(_ title: String, _ subtitle: String) -> NSView {
         let stack = NSStackView()
         stack.orientation = .vertical
@@ -382,6 +446,11 @@ final class AwayoSettingsWindowController: NSWindowController {
     @objc private func awayNoteChanged(_ sender: NSTextField) {
         settingsStore.saveAwayMessage(sender.stringValue)
         refreshAwayNoteControls()
+    }
+
+    @objc private func cameraGagToggled(_ sender: NSButton) {
+        settingsStore.saveCameraGagEnabled(sender.state == .on)
+        refreshCameraGagControls()
     }
 
     @objc private func selectTile(_ sender: AwayoPreviewTile) {
@@ -614,6 +683,10 @@ final class AwayoSettingsWindowController: NSWindowController {
         awayNoteField.stringValue = settingsStore.awayMessage()
         awayNoteField.isEnabled = showsAwayMessage
         awayNoteField.alphaValue = showsAwayMessage ? 1 : 0.55
+    }
+
+    private func refreshCameraGagControls() {
+        cameraGagToggle.state = settingsStore.cameraGagEnabled() ? .on : .off
     }
 
     private func refreshPasscodeStatus() {

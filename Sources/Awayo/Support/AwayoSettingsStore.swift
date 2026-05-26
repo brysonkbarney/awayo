@@ -9,6 +9,7 @@ final class AwayoSettingsStore {
         static let timerStyle = "awayoTimerStyle"
         static let dashboardStyle = "awayoDashboardStyle"
         static let noteStyle = "awayoNoteStyle"
+        static let cameraGagEnabled = "awayoCameraGagEnabled"
         static let awayMessage = "awayoAwayMessage"
         static let showsAwayMessage = "awayoShowsAwayMessage"
         static let completedFirstRun = "completedFirstRun"
@@ -36,7 +37,8 @@ final class AwayoSettingsStore {
             solidBackgroundColor: solidBackgroundColor(),
             timerStyle: value(for: Key.timerStyle, fallback: AwayoAppearance.fallback.timerStyle),
             dashboardStyle: value(for: Key.dashboardStyle, fallback: AwayoAppearance.fallback.dashboardStyle),
-            noteStyle: value(for: Key.noteStyle, fallback: AwayoAppearance.fallback.noteStyle)
+            noteStyle: value(for: Key.noteStyle, fallback: AwayoAppearance.fallback.noteStyle),
+            cameraGagEnabled: cameraGagEnabled()
         )
     }
 
@@ -60,6 +62,18 @@ final class AwayoSettingsStore {
 
     func saveNoteStyle(_ style: AwayoNoteStyle) {
         defaults.set(style.rawValue, forKey: Key.noteStyle)
+    }
+
+    func cameraGagEnabled() -> Bool {
+        guard defaults.object(forKey: Key.cameraGagEnabled) != nil else {
+            return AwayoAppearance.fallback.cameraGagEnabled
+        }
+
+        return defaults.bool(forKey: Key.cameraGagEnabled)
+    }
+
+    func saveCameraGagEnabled(_ enabled: Bool) {
+        defaults.set(enabled, forKey: Key.cameraGagEnabled)
     }
 
     func awayMessage() -> String {

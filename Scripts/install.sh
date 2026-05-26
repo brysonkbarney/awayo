@@ -193,7 +193,6 @@ fi
 if [[ "$RESET_PRIVACY_AFTER_INSTALL" == "1" ]] && command -v tccutil >/dev/null 2>&1; then
   echo "Refreshing macOS privacy records for this Awayo build..."
   tccutil reset ScreenCapture app.awayo.Awayo >/dev/null 2>&1 || true
-  tccutil reset Camera app.awayo.Awayo >/dev/null 2>&1 || true
 fi
 
 if [[ "$OPEN_APP" != "0" ]]; then
