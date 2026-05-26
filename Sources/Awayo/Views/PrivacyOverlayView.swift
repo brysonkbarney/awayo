@@ -1973,17 +1973,19 @@ private final class SnapshotPrankCountdownView: NSView {
     }
 }
 
-private final class AwayoCameraSnapshotter: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable {
+private final class AwayoCameraSnapshotter: NSObject, AVCapturePhotoCaptureDelegate, AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable {
     private struct SnapshotResult: @unchecked Sendable {
-        let image: NSImage?
+        let imageData: Data?
     }
 
     private let completion: @MainActor (NSImage?) -> Void
     private let session = AVCaptureSession()
-    private let output = AVCaptureVideoDataOutput()
+    private let photoOutput = AVCapturePhotoOutput()
+    private let videoOutput = AVCaptureVideoDataOutput()
     private let queue = DispatchQueue(label: "app.awayo.camera-snapshot", qos: .userInitiated)
     private let ciContext = CIContext()
     private var didFinish = false
+    private var firstVideoFrameData: Data?
 
     init(completion: @escaping @MainActor (NSImage?) -> Void) {
         self.completion = completion
@@ -2003,13 +2005,13 @@ private final class AwayoCameraSnapshotter: NSObject, AVCaptureVideoDataOutputSa
                 if granted {
                     self.configureAndCapture()
                 } else {
-                    self.finish(with: nil)
+                    self.finishOnQueue(with: nil)
                 }
             }
         case .denied, .restricted:
-            finish(with: nil)
+            finishOnQueue(with: nil)
         @unknown default:
-            finish(with: nil)
+            finishOnQueue(with: nil)
         }
     }
 
@@ -2027,24 +2029,68 @@ private final class AwayoCameraSnapshotter: NSObject, AVCaptureVideoDataOutputSa
                     ?? AVCaptureDevice.default(for: .video),
                 let input = try? AVCaptureDeviceInput(device: device),
                 self.session.canAddInput(input),
-                self.session.canAddOutput(self.output)
+                self.session.canAddOutput(self.photoOutput)
             else {
                 self.session.commitConfiguration()
-                self.finish(with: nil)
+                self.finishOnQueue(with: nil)
                 return
             }
 
-            self.output.alwaysDiscardsLateVideoFrames = true
-            self.output.setSampleBufferDelegate(self, queue: self.queue)
+            self.videoOutput.videoSettings = [
+                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
+            ]
+            self.videoOutput.alwaysDiscardsLateVideoFrames = true
+            self.videoOutput.setSampleBufferDelegate(self, queue: self.queue)
 
             self.session.addInput(input)
-            self.session.addOutput(self.output)
+            self.session.addOutput(self.photoOutput)
+            if self.session.canAddOutput(self.videoOutput) {
+                self.session.addOutput(self.videoOutput)
+            }
             self.session.commitConfiguration()
             self.session.startRunning()
 
-            self.queue.asyncAfter(deadline: .now() + 6) { [weak self] in
-                self?.finish(with: nil)
+            self.queue.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                self?.capturePhotoOnQueue()
             }
+
+            self.queue.asyncAfter(deadline: .now() + 8) { [weak self] in
+                guard let self else {
+                    return
+                }
+
+                self.finishOnQueue(with: self.firstVideoFrameData)
+            }
+        }
+    }
+
+    private func capturePhotoOnQueue() {
+        guard !didFinish else {
+            return
+        }
+
+        let settings: AVCapturePhotoSettings
+        if photoOutput.availablePhotoCodecTypes.contains(.jpeg) {
+            settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
+        } else {
+            settings = AVCapturePhotoSettings()
+        }
+
+        photoOutput.capturePhoto(with: settings, delegate: self)
+    }
+
+    func photoOutput(
+        _ output: AVCapturePhotoOutput,
+        didFinishProcessingPhoto photo: AVCapturePhoto,
+        error: Error?
+    ) {
+        let imageData = error == nil ? photo.fileDataRepresentation() : nil
+        queue.async { [weak self, imageData] in
+            guard let self else {
+                return
+            }
+
+            self.finishOnQueue(with: imageData ?? self.firstVideoFrameData)
         }
     }
 
@@ -2057,29 +2103,39 @@ private final class AwayoCameraSnapshotter: NSObject, AVCaptureVideoDataOutputSa
             return
         }
 
+        guard firstVideoFrameData == nil else {
+            return
+        }
+
         let ciImage = CIImage(cvImageBuffer: imageBuffer)
         guard let cgImage = ciContext.createCGImage(ciImage, from: ciImage.extent) else {
-            finish(with: nil)
             return
         }
 
         let bitmap = NSBitmapImageRep(cgImage: cgImage)
-        let image = NSImage(size: NSSize(width: cgImage.width, height: cgImage.height))
-        image.addRepresentation(bitmap)
-        finish(with: image)
+        firstVideoFrameData = bitmap.representation(
+            using: .jpeg,
+            properties: [.compressionFactor: 0.86]
+        )
     }
 
-    private func finish(with image: NSImage?) {
+    private func finishOnQueue(with imageData: Data?) {
+        queue.async { [weak self, imageData] in
+            self?.finishNowOnQueue(with: imageData)
+        }
+    }
+
+    private func finishNowOnQueue(with imageData: Data?) {
         guard !didFinish else {
             return
         }
 
         didFinish = true
-        output.setSampleBufferDelegate(nil, queue: nil)
+        videoOutput.setSampleBufferDelegate(nil, queue: nil)
 
-        let result = SnapshotResult(image: image)
+        let result = SnapshotResult(imageData: imageData)
         DispatchQueue.main.async { [completion, result] in
-            completion(result.image)
+            completion(result.imageData.flatMap(NSImage.init(data:)))
         }
 
         queue.async { [session] in
