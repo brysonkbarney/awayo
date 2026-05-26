@@ -11,7 +11,6 @@ WORK_DIR=""
 CLONED_WORK_DIR=""
 DMG_PATH=""
 MOUNT_DIR=""
-RESET_PRIVACY_AFTER_INSTALL="0"
 
 usage() {
   cat <<'USAGE'
@@ -162,17 +161,7 @@ fi
 DEST_PATH="$INSTALL_DIR/Awayo.app"
 mkdir -p "$INSTALL_DIR"
 
-code_hash() {
-  codesign -dv --verbose=4 "$1" 2>&1 | awk -F= '/^CDHash=/ { print $2; exit }'
-}
-
 if [[ -d "$DEST_PATH" ]]; then
-  old_code_hash="$(code_hash "$DEST_PATH" || true)"
-  new_code_hash="$(code_hash "$APP_PATH" || true)"
-  if [[ -n "$old_code_hash" && -n "$new_code_hash" && "$old_code_hash" != "$new_code_hash" ]]; then
-    RESET_PRIVACY_AFTER_INSTALL="1"
-  fi
-
   existing_pids="$(pgrep -f "$DEST_PATH/Contents/MacOS/Awayo" || true)"
   if [[ -n "$existing_pids" ]]; then
     echo "Stopping existing Awayo from $DEST_PATH..."
@@ -188,11 +177,6 @@ ditto "$APP_PATH" "$DEST_PATH"
 
 if command -v codesign >/dev/null 2>&1; then
   codesign --verify --deep --strict "$DEST_PATH"
-fi
-
-if [[ "$RESET_PRIVACY_AFTER_INSTALL" == "1" ]] && command -v tccutil >/dev/null 2>&1; then
-  echo "Refreshing macOS privacy records for this Awayo build..."
-  tccutil reset ScreenCapture app.awayo.Awayo >/dev/null 2>&1 || true
 fi
 
 if [[ "$OPEN_APP" != "0" ]]; then

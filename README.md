@@ -21,7 +21,7 @@ Awayo Lock creates an overlay on every connected display, keeps those overlays a
 
 The Awayo Lock passcode is set before starting a lock session. Awayo stores a salted local hash, not the passcode itself, so it does not need Keychain access.
 
-The Screen Snapshot scene captures each display right before Awayo Lock appears and uses that image as the lock background with a tiny unlock control near the bottom. Move the pointer to the bottom edge to reveal the unlock control. Awayo asks for Screen Recording permission when you choose Screen Snapshot in Settings. Because early builds are ad-hoc signed, the installer refreshes Screen Recording permission records when the app signature changes. The NICE TRY camera gag is off by default and can be enabled in Settings; Awayo asks for Camera permission when you enable that setting.
+The Screen Snapshot scene captures each display right before Awayo Lock appears and uses that image as the lock background with a tiny unlock control near the bottom. Move the pointer to the bottom edge to reveal the unlock control. Awayo asks for Screen Recording permission when you choose Screen Snapshot in Settings. Because early builds are ad-hoc signed, macOS may ask for Screen Recording again after updates. The NICE TRY camera gag is off by default and can be enabled in Settings; Awayo asks for Camera permission when you enable that setting.
 
 Current Awayo Lock styles:
 
