@@ -12,7 +12,7 @@ It is built for the half-open laptop era: a CLI agent, build, download, test sui
 - Start Awayo Lock with a saved passcode, optional away note, and optional countdown.
 - Pick from multiple Awayo Lock scenes and quiet patterns, including Duck Pond, Offline Runner, Screen Snapshot, and custom colors.
 - Let visitors leave sticky notes on the Awayo Lock screen without unlocking the Mac, or turn notes off entirely.
-- Optionally enable a Screen Snapshot NICE TRY camera countdown and Polaroid-style card.
+- Optionally enable an instant Screen Snapshot NICE TRY camera snap and Polaroid-style card.
 - Run entirely from the menu bar.
 
 **Awayo Lock** covers your screen; it is not the macOS Lock Screen.

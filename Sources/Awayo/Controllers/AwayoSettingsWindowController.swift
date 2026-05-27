@@ -289,7 +289,7 @@ final class AwayoSettingsWindowController: NSWindowController {
         title.font = .systemFont(ofSize: 17, weight: .bold)
         title.textColor = .labelColor
 
-        let subtitle = NSTextField(labelWithString: "Optional. When enabled, moving around in Screen Snapshot mode shows a visible countdown and then tries to pin a NICE TRY camera photo.")
+        let subtitle = NSTextField(labelWithString: "Optional. When enabled, moving around in Screen Snapshot mode instantly tries to pin a visible NICE TRY camera photo.")
         subtitle.font = .systemFont(ofSize: 13, weight: .medium)
         subtitle.textColor = .secondaryLabelColor
         subtitle.maximumNumberOfLines = 2
