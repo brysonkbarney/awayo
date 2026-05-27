@@ -11,6 +11,7 @@ WORK_DIR=""
 CLONED_WORK_DIR=""
 DMG_PATH=""
 MOUNT_DIR=""
+CODE_REQUIREMENT='=designated => identifier "app.awayo.Awayo"'
 
 usage() {
   cat <<'USAGE'
@@ -105,6 +106,16 @@ fi
 
 APP_PATH=""
 
+designated_requirement() {
+  codesign -d -r- "$1" 2>&1 | sed -n 's/^designated => //p'
+}
+
+sign_awayo_app() {
+  if command -v codesign >/dev/null 2>&1; then
+    codesign --force --sign - --timestamp=none --requirements "$CODE_REQUIREMENT" "$1" >/dev/null
+  fi
+}
+
 install_from_latest_dmg() {
   local release_url="https://github.com/$GITHUB_REPO/releases/latest/download/Awayo.dmg"
   DMG_PATH="$(mktemp "${TMPDIR:-/tmp}/awayo.XXXXXX.dmg")"
@@ -160,8 +171,10 @@ fi
 
 DEST_PATH="$INSTALL_DIR/Awayo.app"
 mkdir -p "$INSTALL_DIR"
+OLD_REQUIREMENT=""
 
 if [[ -d "$DEST_PATH" ]]; then
+  OLD_REQUIREMENT="$(designated_requirement "$DEST_PATH" || true)"
   existing_pids="$(pgrep -f "$DEST_PATH/Contents/MacOS/Awayo" || true)"
   if [[ -n "$existing_pids" ]]; then
     echo "Stopping existing Awayo from $DEST_PATH..."
@@ -174,9 +187,17 @@ fi
 
 rm -rf "$DEST_PATH"
 ditto "$APP_PATH" "$DEST_PATH"
+sign_awayo_app "$DEST_PATH"
 
 if command -v codesign >/dev/null 2>&1; then
   codesign --verify --deep --strict "$DEST_PATH"
+fi
+
+NEW_REQUIREMENT="$(designated_requirement "$DEST_PATH" || true)"
+if [[ "$OLD_REQUIREMENT" == cdhash* && "$NEW_REQUIREMENT" == 'identifier "app.awayo.Awayo"' ]] && command -v tccutil >/dev/null 2>&1; then
+  echo "Migrating Awayo privacy records for stable local signing..."
+  tccutil reset ScreenCapture app.awayo.Awayo >/dev/null 2>&1 || true
+  tccutil reset Camera app.awayo.Awayo >/dev/null 2>&1 || true
 fi
 
 if [[ "$OPEN_APP" != "0" ]]; then

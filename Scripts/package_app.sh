@@ -9,6 +9,7 @@ MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
 VERSION="$(tr -d '[:space:]' < "$ROOT_DIR/VERSION")"
 BUILD_NUMBER="${AWAYO_BUILD_NUMBER:-}"
+CODE_REQUIREMENT='=designated => identifier "app.awayo.Awayo"'
 
 cd "$ROOT_DIR"
 
@@ -34,7 +35,7 @@ swift "$ROOT_DIR/Scripts/generate_icon.swift" "$RESOURCES_DIR/AppIcon.icns"
 chmod 755 "$MACOS_DIR/$APP_NAME"
 
 if command -v codesign >/dev/null 2>&1; then
-  codesign --force --sign - --timestamp=none "$APP_DIR" >/dev/null
+  codesign --force --sign - --timestamp=none --requirements "$CODE_REQUIREMENT" "$APP_DIR" >/dev/null
 fi
 
 echo "$APP_DIR"
