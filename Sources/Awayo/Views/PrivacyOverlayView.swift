@@ -526,12 +526,24 @@ final class PrivacyOverlayView: NSView {
         snapshotPrankInProgress = true
         snapshotPrankGeneration += 1
         snapshotPrankCountdownTimer?.invalidate()
-        snapshotPrankCountdownTimer = nil
-        snapshotPrankCountdownView?.removeFromSuperview()
-        snapshotPrankCountdownView = nil
+
+        let countdownView = SnapshotPrankCountdownView()
+        countdownView.frame = countdownFrame(near: point)
+        addSubview(countdownView, positioned: .above, relativeTo: nil)
+        snapshotPrankCountdownView = countdownView
+
         snapshotPrankPendingPoint = point
-        snapshotPrankRemainingSeconds = 0
-        captureSnapshotPrank(at: point)
+        snapshotPrankRemainingSeconds = 2
+        countdownView.remainingSeconds = snapshotPrankRemainingSeconds
+        NSSound(named: NSSound.Name("Tink"))?.play()
+
+        snapshotPrankCountdownTimer = Timer.scheduledTimer(
+            timeInterval: 1,
+            target: self,
+            selector: #selector(snapshotPrankCountdownTick(_:)),
+            userInfo: nil,
+            repeats: true
+        )
     }
 
     @objc private func snapshotPrankCountdownTick(_ timer: Timer) {
@@ -2062,17 +2074,12 @@ private final class AwayoCameraSnapshotter: NSObject, AVCapturePhotoCaptureDeleg
             }
             self.session.commitConfiguration()
             self.session.startRunning()
-            self.capturePhotoOnQueue()
 
-            self.queue.asyncAfter(deadline: .now() + 0.35) { [weak self] in
-                guard let self, let firstVideoFrameData = self.firstVideoFrameData else {
-                    return
-                }
-
-                self.finishOnQueue(with: firstVideoFrameData)
+            self.queue.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                self?.capturePhotoOnQueue()
             }
 
-            self.queue.asyncAfter(deadline: .now() + 2) { [weak self] in
+            self.queue.asyncAfter(deadline: .now() + 8) { [weak self] in
                 guard let self else {
                     return
                 }
