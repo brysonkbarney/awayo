@@ -202,7 +202,7 @@ final class PrivacyOverlayController: NSObject {
         }
 
         let coreGraphicsSnapshots = captureScreenSnapshotsWithCoreGraphics()
-        guard !preflightAllowed else {
+        if preflightAllowed || !coreGraphicsSnapshots.isEmpty {
             return coreGraphicsSnapshots
         }
 
