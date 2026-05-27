@@ -12,6 +12,8 @@ CLONED_WORK_DIR=""
 DMG_PATH=""
 MOUNT_DIR=""
 CODE_REQUIREMENT='=designated => identifier "app.awayo.Awayo"'
+MIGRATION_DIR="$HOME/Library/Application Support/Awayo"
+STABLE_SIGNING_MIGRATION_MARKER="$MIGRATION_DIR/stable-signing-privacy-migrated"
 
 usage() {
   cat <<'USAGE'
@@ -107,7 +109,7 @@ fi
 APP_PATH=""
 
 designated_requirement() {
-  codesign -d -r- "$1" 2>&1 | sed -n 's/^designated => //p'
+  codesign -d -r- "$1" 2>&1 | sed -n -e 's/^designated => //p' -e 's/^# designated => //p'
 }
 
 sign_awayo_app() {
@@ -194,10 +196,15 @@ if command -v codesign >/dev/null 2>&1; then
 fi
 
 NEW_REQUIREMENT="$(designated_requirement "$DEST_PATH" || true)"
-if [[ "$OLD_REQUIREMENT" == cdhash* && "$NEW_REQUIREMENT" == 'identifier "app.awayo.Awayo"' ]] && command -v tccutil >/dev/null 2>&1; then
-  echo "Migrating Awayo privacy records for stable local signing..."
-  tccutil reset ScreenCapture app.awayo.Awayo >/dev/null 2>&1 || true
-  tccutil reset Camera app.awayo.Awayo >/dev/null 2>&1 || true
+if [[ "$NEW_REQUIREMENT" == 'identifier "app.awayo.Awayo"' ]]; then
+  if [[ -d "$INSTALL_DIR" && -n "$OLD_REQUIREMENT" && ! -f "$STABLE_SIGNING_MIGRATION_MARKER" ]] && command -v tccutil >/dev/null 2>&1; then
+    echo "Migrating Awayo privacy records for stable local signing..."
+    tccutil reset ScreenCapture app.awayo.Awayo >/dev/null 2>&1 || true
+    tccutil reset Camera app.awayo.Awayo >/dev/null 2>&1 || true
+  fi
+
+  mkdir -p "$MIGRATION_DIR"
+  touch "$STABLE_SIGNING_MIGRATION_MARKER"
 fi
 
 if [[ "$OPEN_APP" != "0" ]]; then
