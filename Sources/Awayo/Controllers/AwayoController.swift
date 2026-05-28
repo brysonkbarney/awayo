@@ -6,6 +6,7 @@ final class AwayoController: NSObject {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let powerManager = PowerAssertionManager()
     private let privacyOverlay = PrivacyOverlayController()
+    private let hotKeyManager = AwayoHotKeyManager()
     private let passcodeStore = PasscodeStore()
     private let defaults = UserDefaults.standard
     private lazy var settingsStore = AwayoSettingsStore(defaults: defaults)
@@ -14,6 +15,7 @@ final class AwayoController: NSObject {
         passcodeStore: passcodeStore
     ) { [weak self] in
         self?.refreshMenu()
+        self?.refreshHotKeyRegistration(showErrors: true)
     }
 
     private var session: AwayoSession?
@@ -21,6 +23,7 @@ final class AwayoController: NSObject {
 
     func start() {
         configureStatusItem()
+        refreshHotKeyRegistration(showErrors: false)
         refreshMenu()
 
         if !settingsStore.hasCompletedFirstRun {
@@ -31,6 +34,7 @@ final class AwayoController: NSObject {
     }
 
     func shutdown() {
+        hotKeyManager.unregister()
         stopSession()
     }
 
@@ -142,7 +146,22 @@ final class AwayoController: NSObject {
     }
 
     @objc private func startPrivacyCoverFromMenu(_ sender: NSMenuItem) {
-        let duration = duration(from: sender)
+        startPrivacyCover(duration: duration(from: sender))
+    }
+
+    private func startPrivacyCoverFromHotKey() {
+        guard session?.mode != .privacy else {
+            return
+        }
+
+        guard settingsWindowController.window?.isVisible != true else {
+            return
+        }
+
+        startPrivacyCover(duration: nil)
+    }
+
+    private func startPrivacyCover(duration: TimeInterval?) {
 
         guard ensureAwayoLockPasscodeExists() else {
             return
@@ -168,6 +187,20 @@ final class AwayoController: NSObject {
             }
         ) { [weak self] in
             self?.stopSession()
+        }
+    }
+
+    private func refreshHotKeyRegistration(showErrors: Bool) {
+        do {
+            try hotKeyManager.register(settingsStore.hotKey()) { [weak self] in
+                Task { @MainActor [weak self] in
+                    self?.startPrivacyCoverFromHotKey()
+                }
+            }
+        } catch {
+            if showErrors {
+                showError(error.localizedDescription)
+            }
         }
     }
 

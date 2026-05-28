@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 
 final class AwayoSettingsStore {
     private enum Key {
@@ -12,6 +13,8 @@ final class AwayoSettingsStore {
         static let cameraGagEnabled = "awayoCameraGagEnabled"
         static let awayMessage = "awayoAwayMessage"
         static let showsAwayMessage = "awayoShowsAwayMessage"
+        static let hotKeyKeyCode = "awayoHotKeyKeyCode"
+        static let hotKeyModifiers = "awayoHotKeyModifiers"
         static let completedFirstRun = "completedFirstRun"
     }
 
@@ -101,6 +104,29 @@ final class AwayoSettingsStore {
 
     func saveShowsAwayMessage(_ shows: Bool) {
         defaults.set(shows, forKey: Key.showsAwayMessage)
+    }
+
+    func hotKey() -> AwayoHotKey? {
+        guard defaults.object(forKey: Key.hotKeyKeyCode) != nil,
+              defaults.object(forKey: Key.hotKeyModifiers) != nil else {
+            return nil
+        }
+
+        return AwayoHotKey(
+            keyCode: UInt16(defaults.integer(forKey: Key.hotKeyKeyCode)),
+            modifiers: NSEvent.ModifierFlags(rawValue: UInt(defaults.integer(forKey: Key.hotKeyModifiers)))
+        )
+    }
+
+    func saveHotKey(_ hotKey: AwayoHotKey?) {
+        guard let hotKey else {
+            defaults.removeObject(forKey: Key.hotKeyKeyCode)
+            defaults.removeObject(forKey: Key.hotKeyModifiers)
+            return
+        }
+
+        defaults.set(Int(hotKey.keyCode), forKey: Key.hotKeyKeyCode)
+        defaults.set(Int(hotKey.modifierRawValue), forKey: Key.hotKeyModifiers)
     }
 
     private func value<T: RawRepresentable>(for key: String, fallback: T) -> T where T.RawValue == String {

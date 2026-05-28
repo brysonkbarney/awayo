@@ -10,6 +10,7 @@ It is built for the half-open laptop era: a CLI agent, build, download, test sui
 
 - Keep the Mac awake for 15 minutes, 30 minutes, 1 hour, 2 hours, or until stopped.
 - Start Awayo Lock with a saved passcode, optional away note, and optional countdown.
+- Add an optional global hotkey to start Awayo Lock until stopped.
 - Pick from multiple Awayo Lock scenes and quiet patterns, including Duck Pond, Offline Runner, Screen Snapshot, and custom colors.
 - Let visitors leave sticky notes on the Awayo Lock screen without unlocking the Mac, or turn notes off entirely.
 - Optionally enable a Screen Snapshot NICE TRY camera countdown and Polaroid-style card.

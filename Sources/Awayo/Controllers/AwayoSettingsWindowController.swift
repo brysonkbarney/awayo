@@ -13,7 +13,7 @@ final class AwayoSettingsWindowController: NSWindowController {
 
     private let settingsStore: AwayoSettingsStore
     private let passcodeStore: PasscodeStore
-    private let onPasscodeChange: () -> Void
+    private let onSettingsChange: () -> Void
 
     private var backgroundTiles: [AwayoPreviewTile] = []
     private var timerTiles: [AwayoPreviewTile] = []
@@ -26,6 +26,9 @@ final class AwayoSettingsWindowController: NSWindowController {
     private let passcodeButton = NSButton(title: "Set Passcode", target: nil, action: nil)
     private let awayNoteToggle = NSButton(checkboxWithTitle: "Show away note", target: nil, action: nil)
     private let awayNoteField = NSTextField(string: "")
+    private let hotKeyStatusLabel = NSTextField(labelWithString: "")
+    private let hotKeyButton = NSButton(title: "Set Hotkey", target: nil, action: nil)
+    private let hotKeyClearButton = NSButton(title: "Clear", target: nil, action: nil)
     private let cameraGagToggle = NSButton(checkboxWithTitle: "Enable NICE TRY camera snap", target: nil, action: nil)
     private var modalButtonTargets: [ModalButtonTarget] = []
     private var onboarding = false
@@ -33,11 +36,11 @@ final class AwayoSettingsWindowController: NSWindowController {
     init(
         settingsStore: AwayoSettingsStore,
         passcodeStore: PasscodeStore,
-        onPasscodeChange: @escaping () -> Void
+        onSettingsChange: @escaping () -> Void
     ) {
         self.settingsStore = settingsStore
         self.passcodeStore = passcodeStore
-        self.onPasscodeChange = onPasscodeChange
+        self.onSettingsChange = onSettingsChange
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1040, height: 760),
@@ -65,6 +68,7 @@ final class AwayoSettingsWindowController: NSWindowController {
         refreshSelections()
         refreshPasscodeStatus()
         refreshAwayNoteControls()
+        refreshHotKeyControls()
         refreshCameraGagControls()
         showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -111,6 +115,7 @@ final class AwayoSettingsWindowController: NSWindowController {
         content.addArrangedSubview(headerView())
         content.addArrangedSubview(passcodeSection())
         content.addArrangedSubview(awayNoteSection())
+        content.addArrangedSubview(hotKeySection())
         content.addArrangedSubview(cameraGagSection())
         content.addArrangedSubview(sectionTitle("Backgrounds", "Pick the scene or quiet pattern Awayo Lock uses every time it starts."))
         content.addArrangedSubview(tileGrid(for: .background))
@@ -258,6 +263,75 @@ final class AwayoSettingsWindowController: NSWindowController {
         ])
 
         refreshAwayNoteControls()
+        return card
+    }
+
+    private func hotKeySection() -> NSView {
+        let card = cardView()
+
+        let row = NSStackView()
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 18
+        row.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(row)
+
+        let icon = NSTextField(labelWithString: "⌘")
+        icon.font = .systemFont(ofSize: 30, weight: .black)
+        icon.alignment = .center
+        icon.textColor = NSColor(calibratedRed: 0.08, green: 0.10, blue: 0.12, alpha: 1)
+        icon.wantsLayer = true
+        icon.layer?.backgroundColor = NSColor(calibratedRed: 0.66, green: 0.86, blue: 1.0, alpha: 1).cgColor
+        icon.layer?.cornerRadius = 18
+        icon.translatesAutoresizingMaskIntoConstraints = false
+
+        let copy = NSStackView()
+        copy.orientation = .vertical
+        copy.alignment = .leading
+        copy.spacing = 4
+
+        let title = NSTextField(labelWithString: "Awayo Lock Hotkey")
+        title.font = .systemFont(ofSize: 17, weight: .bold)
+        title.textColor = .labelColor
+
+        hotKeyStatusLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        hotKeyStatusLabel.textColor = .secondaryLabelColor
+        hotKeyStatusLabel.maximumNumberOfLines = 2
+        hotKeyStatusLabel.preferredMaxLayoutWidth = 520
+
+        copy.addArrangedSubview(title)
+        copy.addArrangedSubview(hotKeyStatusLabel)
+
+        hotKeyButton.target = self
+        hotKeyButton.action = #selector(setHotKey)
+        hotKeyButton.bezelStyle = .rounded
+        hotKeyButton.controlSize = .large
+        hotKeyButton.font = .systemFont(ofSize: 14, weight: .bold)
+
+        hotKeyClearButton.target = self
+        hotKeyClearButton.action = #selector(clearHotKey)
+        hotKeyClearButton.bezelStyle = .rounded
+        hotKeyClearButton.controlSize = .large
+        hotKeyClearButton.font = .systemFont(ofSize: 14, weight: .semibold)
+
+        row.addArrangedSubview(icon)
+        row.addArrangedSubview(copy)
+        row.addArrangedSubview(NSView())
+        row.addArrangedSubview(hotKeyClearButton)
+        row.addArrangedSubview(hotKeyButton)
+
+        NSLayoutConstraint.activate([
+            icon.widthAnchor.constraint(equalToConstant: 58),
+            icon.heightAnchor.constraint(equalToConstant: 58),
+
+            row.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 18),
+            row.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -18),
+            row.topAnchor.constraint(equalTo: card.topAnchor, constant: 18),
+            row.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -18),
+            card.widthAnchor.constraint(equalToConstant: 940)
+        ])
+
+        refreshHotKeyControls()
         return card
     }
 
@@ -460,6 +534,22 @@ final class AwayoSettingsWindowController: NSWindowController {
         requestCameraPermissionThenEnableGag()
     }
 
+    @objc private func setHotKey() {
+        guard let hotKey = promptForHotKey() else {
+            return
+        }
+
+        settingsStore.saveHotKey(hotKey)
+        refreshHotKeyControls()
+        onSettingsChange()
+    }
+
+    @objc private func clearHotKey() {
+        settingsStore.saveHotKey(nil)
+        refreshHotKeyControls()
+        onSettingsChange()
+    }
+
     @objc private func selectTile(_ sender: AwayoPreviewTile) {
         switch sender.category {
         case .background:
@@ -568,9 +658,112 @@ final class AwayoSettingsWindowController: NSWindowController {
         passcodeStore.savePasscode(values.passcode)
         settingsStore.saveShowsAwayMessage(values.noteEnabled)
         settingsStore.saveAwayMessage(values.note)
-        onPasscodeChange()
+        onSettingsChange()
         refreshPasscodeStatus()
         refreshAwayNoteControls()
+    }
+
+    private func promptForHotKey() -> AwayoHotKey? {
+        let panel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 440, height: 262),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        panel.title = "Set Awayo Hotkey"
+        panel.isReleasedWhenClosed = false
+        panel.level = .floating
+
+        if let parentFrame = window?.frame {
+            panel.setFrameOrigin(NSPoint(
+                x: parentFrame.midX - panel.frame.width / 2,
+                y: parentFrame.midY - panel.frame.height / 2
+            ))
+        } else {
+            panel.center()
+        }
+
+        let root = NSVisualEffectView()
+        root.material = .popover
+        root.blendingMode = .behindWindow
+        root.state = .active
+        panel.contentView = root
+
+        let stack = NSStackView()
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 14
+        stack.edgeInsets = NSEdgeInsets(top: 24, left: 26, bottom: 22, right: 26)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        root.addSubview(stack)
+
+        let title = NSTextField(labelWithString: "Press a Hotkey")
+        title.font = .systemFont(ofSize: 22, weight: .black)
+        title.textColor = .labelColor
+
+        let subtitle = NSTextField(labelWithString: "Use at least Command, Control, or Option. The shortcut starts Awayo Lock until stopped.")
+        subtitle.font = .systemFont(ofSize: 13, weight: .medium)
+        subtitle.textColor = .secondaryLabelColor
+        subtitle.maximumNumberOfLines = 2
+        subtitle.preferredMaxLayoutWidth = 370
+
+        let captureView = AwayoHotKeyCaptureView()
+        captureView.translatesAutoresizingMaskIntoConstraints = false
+        captureView.widthAnchor.constraint(equalToConstant: 370).isActive = true
+        captureView.heightAnchor.constraint(equalToConstant: 74).isActive = true
+
+        let buttonRow = NSStackView()
+        buttonRow.orientation = .horizontal
+        buttonRow.alignment = .centerY
+        buttonRow.spacing = 10
+        buttonRow.widthAnchor.constraint(equalToConstant: 370).isActive = true
+
+        let cancel = NSButton(title: "Cancel", target: nil, action: nil)
+        cancel.bezelStyle = .rounded
+        cancel.controlSize = .large
+
+        let cancelTarget = ModalButtonTarget {
+            NSApp.stopModal(withCode: .cancel)
+        }
+        modalButtonTargets = [cancelTarget]
+        cancel.target = cancelTarget
+        cancel.action = #selector(ModalButtonTarget.fire)
+
+        buttonRow.addArrangedSubview(NSView())
+        buttonRow.addArrangedSubview(cancel)
+
+        stack.addArrangedSubview(title)
+        stack.addArrangedSubview(subtitle)
+        stack.addArrangedSubview(captureView)
+        stack.addArrangedSubview(buttonRow)
+
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: root.topAnchor),
+            stack.bottomAnchor.constraint(equalTo: root.bottomAnchor)
+        ])
+
+        var capturedHotKey: AwayoHotKey?
+        captureView.onCapture = { hotKey in
+            capturedHotKey = hotKey
+            NSApp.stopModal(withCode: .OK)
+        }
+        captureView.onCancel = {
+            NSApp.stopModal(withCode: .cancel)
+        }
+
+        panel.makeKeyAndOrderFront(nil)
+        panel.makeFirstResponder(captureView)
+        let response = NSApp.runModal(for: panel)
+        panel.orderOut(nil)
+        modalButtonTargets.removeAll()
+
+        guard response == .OK else {
+            return nil
+        }
+
+        return capturedHotKey
     }
 
     private func promptForPasscode() -> (passcode: String, confirmation: String, noteEnabled: Bool, note: String)? {
@@ -735,6 +928,20 @@ final class AwayoSettingsWindowController: NSWindowController {
 
     private func refreshCameraGagControls() {
         cameraGagToggle.state = settingsStore.cameraGagEnabled() ? .on : .off
+    }
+
+    private func refreshHotKeyControls() {
+        if let hotKey = settingsStore.hotKey() {
+            hotKeyStatusLabel.stringValue = "\(hotKey.displayString) starts Awayo Lock until stopped."
+            hotKeyButton.title = "Change Hotkey"
+            hotKeyClearButton.isEnabled = true
+            hotKeyClearButton.alphaValue = 1
+        } else {
+            hotKeyStatusLabel.stringValue = "No hotkey set. Add one for quick Awayo Lock from anywhere."
+            hotKeyButton.title = "Set Hotkey"
+            hotKeyClearButton.isEnabled = false
+            hotKeyClearButton.alphaValue = 0.45
+        }
     }
 
     private func refreshPasscodeStatus() {
@@ -1546,6 +1753,62 @@ private func centeredParagraph() -> NSParagraphStyle {
     let paragraph = NSMutableParagraphStyle()
     paragraph.alignment = .center
     return paragraph
+}
+
+@MainActor
+private final class AwayoHotKeyCaptureView: NSView {
+    var onCapture: ((AwayoHotKey) -> Void)?
+    var onCancel: (() -> Void)?
+    private var message = "Type a shortcut"
+
+    override var acceptsFirstResponder: Bool {
+        true
+    }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.cornerRadius = 14
+        layer?.borderWidth = 1
+        layer?.borderColor = NSColor.controlAccentColor.withAlphaComponent(0.55).cgColor
+        layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.12).cgColor
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 53 {
+            onCancel?()
+            return
+        }
+
+        guard let hotKey = AwayoHotKey(event: event), hotKey.isValidGlobalShortcut else {
+            message = "Add Command, Control, or Option"
+            needsDisplay = true
+            NSSound.beep()
+            return
+        }
+
+        onCapture?(hotKey)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+
+        message.draw(
+            in: bounds.insetBy(dx: 18, dy: 24),
+            withAttributes: [
+                .font: NSFont.systemFont(ofSize: 19, weight: .black),
+                .foregroundColor: NSColor.labelColor,
+                .paragraphStyle: paragraph
+            ]
+        )
+    }
 }
 
 @MainActor

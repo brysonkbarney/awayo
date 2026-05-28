@@ -20,6 +20,7 @@ let package = Package(
             linkerSettings: [
                 .linkedFramework("AVFoundation"),
                 .linkedFramework("AppKit"),
+                .linkedFramework("Carbon"),
                 .linkedFramework("CoreImage"),
                 .linkedFramework("IOKit")
             ]
