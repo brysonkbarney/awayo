@@ -3,12 +3,86 @@ import AppKit
 import CoreGraphics
 
 @MainActor
-final class AwayoSettingsWindowController: NSWindowController {
+final class AwayoSettingsWindowController: NSWindowController, NSTextFieldDelegate {
     private enum Layout {
-        static let previewTileWidth: CGFloat = 222
-        static let previewTileHeight: CGFloat = 156
+        static let sidebarWidth: CGFloat = 210
+        static let pageWidth: CGFloat = 760
+        static let setupCardWidth: CGFloat = 370
+        static let setupCardSpacing: CGFloat = 14
+        static let previewTileWidth: CGFloat = 238
+        static let previewTileHeight: CGFloat = 138
         static let previewTileSpacing: CGFloat = 14
-        static let previewGridWidth = previewTileWidth * 4 + previewTileSpacing * 3
+        static let previewGridColumns = 3
+        static let previewGridWidth = previewTileWidth * CGFloat(previewGridColumns) + previewTileSpacing * CGFloat(previewGridColumns - 1)
+        static let permissionItemWidth: CGFloat = 356
+    }
+
+    private enum SettingsPage: Int, CaseIterable {
+        case start
+        case lockScreen
+        case display
+        case notes
+        case permissions
+
+        var title: String {
+            switch self {
+            case .start:
+                "Start"
+            case .lockScreen:
+                "Lock Screen"
+            case .display:
+                "Timer & Display"
+            case .notes:
+                "Notes"
+            case .permissions:
+                "Permissions"
+            }
+        }
+
+        var subtitle: String {
+            switch self {
+            case .start:
+                "Set the passcode and keyboard shortcut you use every day."
+            case .lockScreen:
+                "Choose the scene people see when Awayo Lock is active."
+            case .display:
+                "Control how much the countdown and dashboard show up."
+            case .notes:
+                "Decide whether visitors can leave sticky notes and how they look."
+            case .permissions:
+                "Check the macOS access needed for Screen Snapshot and the optional camera gag."
+            }
+        }
+
+        var navSubtitle: String {
+            switch self {
+            case .start:
+                "passcode + hotkey"
+            case .lockScreen:
+                "background scene"
+            case .display:
+                "timer + dashboard"
+            case .notes:
+                "away note + stickies"
+            case .permissions:
+                "macOS access"
+            }
+        }
+
+        var symbolName: String {
+            switch self {
+            case .start:
+                "play.circle.fill"
+            case .lockScreen:
+                "lock.rectangle.stack.fill"
+            case .display:
+                "timer"
+            case .notes:
+                "note.text"
+            case .permissions:
+                "checkmark.shield.fill"
+            }
+        }
     }
 
     private let settingsStore: AwayoSettingsStore
@@ -19,8 +93,6 @@ final class AwayoSettingsWindowController: NSWindowController {
     private var timerTiles: [AwayoPreviewTile] = []
     private var dashboardTiles: [AwayoPreviewTile] = []
     private var noteTiles: [AwayoPreviewTile] = []
-    private let headerTitleLabel = NSTextField(labelWithString: "")
-    private let headerSubtitleLabel = NSTextField(labelWithString: "")
     private let backgroundColorSwatch = AwayoColorSwatchView()
     private var passcodeStatusLabel = NSTextField(labelWithString: "")
     private let passcodeButton = NSButton(title: "Set Passcode", target: nil, action: nil)
@@ -29,7 +101,15 @@ final class AwayoSettingsWindowController: NSWindowController {
     private let hotKeyStatusLabel = NSTextField(labelWithString: "")
     private let hotKeyButton = NSButton(title: "Set Hotkey", target: nil, action: nil)
     private let hotKeyClearButton = NSButton(title: "Clear", target: nil, action: nil)
-    private let cameraGagToggle = NSButton(checkboxWithTitle: "Enable NICE TRY camera snap", target: nil, action: nil)
+    private let cameraGagToggle = NSButton(checkboxWithTitle: "Enabled", target: nil, action: nil)
+    private let screenRecordingStatusLabel = NSTextField(labelWithString: "")
+    private let cameraPermissionStatusLabel = NSTextField(labelWithString: "")
+    private let pageTitleLabel = NSTextField(labelWithString: "")
+    private let pageSubtitleLabel = NSTextField(labelWithString: "")
+    private let pageContentContainer = NSView()
+    private var pageButtons: [SettingsPage: AwayoSidebarButton] = [:]
+    private var pageViews: [SettingsPage: NSView] = [:]
+    private var selectedPage: SettingsPage = .start
     private var modalButtonTargets: [ModalButtonTarget] = []
     private var onboarding = false
 
@@ -43,7 +123,7 @@ final class AwayoSettingsWindowController: NSWindowController {
         self.onSettingsChange = onSettingsChange
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1040, height: 760),
+            contentRect: NSRect(x: 0, y: 0, width: 1020, height: 700),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -64,12 +144,13 @@ final class AwayoSettingsWindowController: NSWindowController {
     func show(onboarding: Bool) {
         self.onboarding = onboarding
         window?.title = onboarding ? "Set Up Awayo" : "Awayo Settings"
-        refreshHeader()
         refreshSelections()
         refreshPasscodeStatus()
         refreshAwayNoteControls()
         refreshHotKeyControls()
         refreshCameraGagControls()
+        refreshPermissionControls()
+        selectPage(onboarding ? .start : selectedPage)
         showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -80,91 +161,270 @@ final class AwayoSettingsWindowController: NSWindowController {
         root.blendingMode = .behindWindow
         root.state = .active
 
-        let scrollView = NSScrollView()
-        scrollView.drawsBackground = false
-        scrollView.hasVerticalScroller = true
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
-        root.addSubview(scrollView)
+        let sidebar = sidebarView()
+        sidebar.translatesAutoresizingMaskIntoConstraints = false
+        root.addSubview(sidebar)
 
-        let content = NSStackView()
-        content.orientation = .vertical
-        content.alignment = .leading
-        content.spacing = 22
-        content.edgeInsets = NSEdgeInsets(top: 34, left: 40, bottom: 34, right: 40)
-        content.translatesAutoresizingMaskIntoConstraints = false
+        let main = NSView()
+        main.translatesAutoresizingMaskIntoConstraints = false
+        root.addSubview(main)
 
-        let document = NSView()
-        document.translatesAutoresizingMaskIntoConstraints = false
-        document.addSubview(content)
-        scrollView.documentView = document
+        let header = mainHeaderView()
+        header.translatesAutoresizingMaskIntoConstraints = false
+        main.addSubview(header)
+
+        pageContentContainer.translatesAutoresizingMaskIntoConstraints = false
+        main.addSubview(pageContentContainer)
 
         NSLayoutConstraint.activate([
-            scrollView.leadingAnchor.constraint(equalTo: root.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-            scrollView.topAnchor.constraint(equalTo: root.topAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: root.bottomAnchor),
+            sidebar.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            sidebar.topAnchor.constraint(equalTo: root.topAnchor),
+            sidebar.bottomAnchor.constraint(equalTo: root.bottomAnchor),
+            sidebar.widthAnchor.constraint(equalToConstant: Layout.sidebarWidth),
 
-            document.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor),
+            main.leadingAnchor.constraint(equalTo: sidebar.trailingAnchor),
+            main.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+            main.topAnchor.constraint(equalTo: root.topAnchor),
+            main.bottomAnchor.constraint(equalTo: root.bottomAnchor),
 
-            content.leadingAnchor.constraint(equalTo: document.leadingAnchor),
-            content.trailingAnchor.constraint(equalTo: document.trailingAnchor),
-            content.topAnchor.constraint(equalTo: document.topAnchor),
-            content.bottomAnchor.constraint(equalTo: document.bottomAnchor)
+            header.leadingAnchor.constraint(equalTo: main.leadingAnchor, constant: 26),
+            header.topAnchor.constraint(equalTo: main.topAnchor, constant: 24),
+            header.widthAnchor.constraint(equalToConstant: Layout.pageWidth),
+
+            pageContentContainer.leadingAnchor.constraint(equalTo: header.leadingAnchor),
+            pageContentContainer.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 16),
+            pageContentContainer.bottomAnchor.constraint(equalTo: main.bottomAnchor, constant: -22),
+            pageContentContainer.widthAnchor.constraint(equalToConstant: Layout.pageWidth)
         ])
 
-        content.addArrangedSubview(headerView())
-        content.addArrangedSubview(passcodeSection())
-        content.addArrangedSubview(awayNoteSection())
-        content.addArrangedSubview(hotKeySection())
-        content.addArrangedSubview(cameraGagSection())
-        content.addArrangedSubview(sectionTitle("Backgrounds", "Pick the scene or quiet pattern Awayo Lock uses every time it starts."))
-        content.addArrangedSubview(tileGrid(for: .background))
-        content.addArrangedSubview(customColorControl())
-        content.addArrangedSubview(sectionTitle("Timer", "Choose the way the countdown feels."))
-        content.addArrangedSubview(tileGrid(for: .timer))
-        content.addArrangedSubview(sectionTitle("Dashboard", "Choose how much presence the center display has."))
-        content.addArrangedSubview(tileGrid(for: .dashboard))
-        content.addArrangedSubview(sectionTitle("Sticky Notes", "Choose how notes from visitors should look."))
-        content.addArrangedSubview(tileGrid(for: .note))
-        content.addArrangedSubview(doneRow())
+        pageViews = [
+            .start: pageScrollView(startPage()),
+            .lockScreen: pageScrollView(lockScreenPage()),
+            .display: pageScrollView(displayPage()),
+            .notes: pageScrollView(notesPage()),
+            .permissions: pageScrollView(permissionsPage())
+        ]
+
+        SettingsPage.allCases.forEach { page in
+            guard let view = pageViews[page] else {
+                return
+            }
+
+            view.translatesAutoresizingMaskIntoConstraints = false
+            pageContentContainer.addSubview(view)
+            NSLayoutConstraint.activate([
+                view.leadingAnchor.constraint(equalTo: pageContentContainer.leadingAnchor),
+                view.trailingAnchor.constraint(equalTo: pageContentContainer.trailingAnchor),
+                view.topAnchor.constraint(equalTo: pageContentContainer.topAnchor),
+                view.bottomAnchor.constraint(equalTo: pageContentContainer.bottomAnchor)
+            ])
+        }
+
+        selectPage(.start)
 
         return root
     }
 
-    private func headerView() -> NSView {
+    private func sidebarView() -> NSView {
+        let sidebar = NSVisualEffectView()
+        sidebar.material = .sidebar
+        sidebar.blendingMode = .behindWindow
+        sidebar.state = .active
+
         let stack = NSStackView()
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 8
+        stack.edgeInsets = NSEdgeInsets(top: 24, left: 14, bottom: 18, right: 14)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        sidebar.addSubview(stack)
 
-        let eyebrow = NSTextField(labelWithString: "AWAYO")
-        eyebrow.font = .monospacedSystemFont(ofSize: 12, weight: .heavy)
-        eyebrow.textColor = NSColor(calibratedRed: 0.98, green: 0.84, blue: 0.28, alpha: 1)
+        let brand = NSTextField(labelWithString: "Awayo")
+        brand.font = .systemFont(ofSize: 24, weight: .black)
+        brand.textColor = .labelColor
 
-        headerTitleLabel.font = .systemFont(ofSize: 34, weight: .black)
-        headerTitleLabel.textColor = .labelColor
+        let tagline = NSTextField(labelWithString: "don't let your agents die")
+        tagline.font = .systemFont(ofSize: 11, weight: .semibold)
+        tagline.textColor = .secondaryLabelColor
 
-        headerSubtitleLabel.font = .systemFont(ofSize: 15, weight: .medium)
-        headerSubtitleLabel.textColor = .secondaryLabelColor
-        headerSubtitleLabel.maximumNumberOfLines = 2
-        headerSubtitleLabel.preferredMaxLayoutWidth = 820
-        refreshHeader()
+        stack.addArrangedSubview(brand)
+        stack.addArrangedSubview(tagline)
+        stack.addArrangedSubview(sidebarSpacer(height: 10))
 
-        stack.addArrangedSubview(eyebrow)
-        stack.addArrangedSubview(headerTitleLabel)
-        stack.addArrangedSubview(headerSubtitleLabel)
+        SettingsPage.allCases.forEach { page in
+            let button = AwayoSidebarButton(title: page.title, subtitle: page.navSubtitle, symbolName: page.symbolName)
+            button.tag = page.rawValue
+            button.target = self
+            button.action = #selector(selectPageFromSidebar(_:))
+            button.translatesAutoresizingMaskIntoConstraints = false
+            button.widthAnchor.constraint(equalToConstant: Layout.sidebarWidth - 28).isActive = true
+            button.heightAnchor.constraint(equalToConstant: 42).isActive = true
+            pageButtons[page] = button
+            stack.addArrangedSubview(button)
+        }
+
+        stack.addArrangedSubview(NSView())
+
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: sidebar.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: sidebar.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: sidebar.topAnchor),
+            stack.bottomAnchor.constraint(equalTo: sidebar.bottomAnchor)
+        ])
+
+        return sidebar
+    }
+
+    private func mainHeaderView() -> NSView {
+        let row = NSStackView()
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 18
+
+        let copy = NSStackView()
+        copy.orientation = .vertical
+        copy.alignment = .leading
+        copy.spacing = 4
+
+        pageTitleLabel.font = .systemFont(ofSize: 24, weight: .bold)
+        pageTitleLabel.textColor = .labelColor
+
+        pageSubtitleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+        pageSubtitleLabel.textColor = .secondaryLabelColor
+        pageSubtitleLabel.maximumNumberOfLines = 2
+        pageSubtitleLabel.preferredMaxLayoutWidth = 560
+
+        copy.addArrangedSubview(pageTitleLabel)
+        copy.addArrangedSubview(pageSubtitleLabel)
+
+        let close = NSButton(title: "Close Settings", target: self, action: #selector(done))
+        close.bezelStyle = .rounded
+        close.controlSize = .regular
+        close.font = .systemFont(ofSize: 13, weight: .semibold)
+
+        row.addArrangedSubview(copy)
+        row.addArrangedSubview(NSView())
+        row.addArrangedSubview(close)
+
+        return row
+    }
+
+    private func pageScrollView(_ content: NSView) -> NSScrollView {
+        let scrollView = NSScrollView()
+        scrollView.drawsBackground = false
+        scrollView.hasVerticalScroller = true
+
+        let document = AwayoFlippedView()
+        document.translatesAutoresizingMaskIntoConstraints = false
+        content.translatesAutoresizingMaskIntoConstraints = false
+        document.addSubview(content)
+        scrollView.documentView = document
+
+        NSLayoutConstraint.activate([
+            document.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor),
+            content.leadingAnchor.constraint(equalTo: document.leadingAnchor),
+            content.topAnchor.constraint(equalTo: document.topAnchor),
+            content.bottomAnchor.constraint(equalTo: document.bottomAnchor),
+            content.widthAnchor.constraint(equalToConstant: Layout.pageWidth)
+        ])
+
+        return scrollView
+    }
+
+    private func pageStack() -> NSStackView {
+        let stack = NSStackView()
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 14
+        stack.edgeInsets = NSEdgeInsets(top: 0, left: 0, bottom: 18, right: 0)
         return stack
+    }
+
+    private func startPage() -> NSView {
+        let stack = pageStack()
+        stack.addArrangedSubview(twoColumnRow(passcodeSection(), hotKeySection()))
+        stack.addArrangedSubview(sectionTitle("Message", "Set what Awayo Lock says, or leave it blank."))
+        stack.addArrangedSubview(awayNoteSection())
+        return stack
+    }
+
+    private func lockScreenPage() -> NSView {
+        let stack = pageStack()
+        stack.addArrangedSubview(sectionTitle("Background", "Pick the main scene or pattern for Awayo Lock."))
+        stack.addArrangedSubview(customColorControl())
+        stack.addArrangedSubview(tileGrid(for: .background))
+        return stack
+    }
+
+    private func displayPage() -> NSView {
+        let stack = pageStack()
+        stack.addArrangedSubview(sectionTitle("Timer", "Show a big countdown, a quieter clock, or no timer at all."))
+        stack.addArrangedSubview(tileGrid(for: .timer))
+        stack.addArrangedSubview(sectionTitle("Dashboard", "Choose the center display style people see from across the room."))
+        stack.addArrangedSubview(tileGrid(for: .dashboard))
+        return stack
+    }
+
+    private func notesPage() -> NSView {
+        let stack = pageStack()
+        stack.addArrangedSubview(sectionTitle("Sticky Notes", "Choose how notes from friends show up on the lock screen."))
+        stack.addArrangedSubview(tileGrid(for: .note))
+        return stack
+    }
+
+    private func permissionsPage() -> NSView {
+        let stack = pageStack()
+        stack.addArrangedSubview(permissionSection())
+        stack.addArrangedSubview(sectionTitle("Optional Camera Gag", "Only used when Screen Snapshot mode and NICE TRY Camera are both enabled."))
+        stack.addArrangedSubview(cameraGagSection())
+        return stack
+    }
+
+    private func twoColumnRow(_ leading: NSView, _ trailing: NSView) -> NSView {
+        let row = NSStackView(views: [leading, trailing])
+        row.orientation = .horizontal
+        row.alignment = .top
+        row.spacing = Layout.setupCardSpacing
+        return row
+    }
+
+    private func sidebarSpacer(height: CGFloat) -> NSView {
+        let view = NSView()
+        view.heightAnchor.constraint(equalToConstant: height).isActive = true
+        return view
+    }
+
+    @objc private func selectPageFromSidebar(_ sender: NSButton) {
+        guard let page = SettingsPage(rawValue: sender.tag) else {
+            return
+        }
+
+        selectPage(page)
+    }
+
+    private func selectPage(_ page: SettingsPage) {
+        selectedPage = page
+        pageTitleLabel.stringValue = page.title
+        pageSubtitleLabel.stringValue = page.subtitle
+
+        pageButtons.forEach { candidate, button in
+            button.isPicked = candidate == page
+        }
+
+        pageViews.forEach { candidate, view in
+            view.isHidden = candidate != page
+        }
     }
 
     private func passcodeSection() -> NSView {
         let card = cardView()
 
-        let row = NSStackView()
-        row.orientation = .horizontal
-        row.alignment = .centerY
-        row.spacing = 18
-        row.translatesAutoresizingMaskIntoConstraints = false
-        card.addSubview(row)
+        let stack = NSStackView()
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 14
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(stack)
 
         let icon = NSTextField(labelWithString: "A")
         icon.font = .systemFont(ofSize: 30, weight: .black)
@@ -186,6 +446,11 @@ final class AwayoSettingsWindowController: NSWindowController {
 
         passcodeStatusLabel.font = .systemFont(ofSize: 13, weight: .medium)
         passcodeStatusLabel.textColor = .secondaryLabelColor
+        passcodeStatusLabel.maximumNumberOfLines = 2
+        passcodeStatusLabel.preferredMaxLayoutWidth = 310
+        passcodeStatusLabel.lineBreakMode = .byWordWrapping
+        passcodeStatusLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        copy.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         copy.addArrangedSubview(title)
         copy.addArrangedSubview(passcodeStatusLabel)
@@ -195,21 +460,30 @@ final class AwayoSettingsWindowController: NSWindowController {
         passcodeButton.bezelStyle = .rounded
         passcodeButton.controlSize = .large
         passcodeButton.font = .systemFont(ofSize: 14, weight: .bold)
+        passcodeButton.widthAnchor.constraint(equalToConstant: 132).isActive = true
 
-        row.addArrangedSubview(icon)
-        row.addArrangedSubview(copy)
-        row.addArrangedSubview(NSView())
-        row.addArrangedSubview(passcodeButton)
+        let topRow = NSStackView(views: [icon, copy])
+        topRow.orientation = .horizontal
+        topRow.alignment = .centerY
+        topRow.spacing = 16
+
+        let actionRow = NSStackView(views: [NSView(), passcodeButton])
+        actionRow.orientation = .horizontal
+        actionRow.alignment = .centerY
+        actionRow.widthAnchor.constraint(equalToConstant: Layout.setupCardWidth - 36).isActive = true
+
+        stack.addArrangedSubview(topRow)
+        stack.addArrangedSubview(actionRow)
 
         NSLayoutConstraint.activate([
             icon.widthAnchor.constraint(equalToConstant: 58),
             icon.heightAnchor.constraint(equalToConstant: 58),
 
-            row.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 18),
-            row.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -18),
-            row.topAnchor.constraint(equalTo: card.topAnchor, constant: 18),
-            row.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -18),
-            card.widthAnchor.constraint(equalToConstant: 940)
+            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 18),
+            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -18),
+            stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 18),
+            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -18),
+            card.widthAnchor.constraint(equalToConstant: Layout.setupCardWidth)
         ])
 
         refreshPasscodeStatus()
@@ -234,7 +508,7 @@ final class AwayoSettingsWindowController: NSWindowController {
         subtitle.font = .systemFont(ofSize: 13, weight: .medium)
         subtitle.textColor = .secondaryLabelColor
         subtitle.maximumNumberOfLines = 2
-        subtitle.preferredMaxLayoutWidth = 820
+        subtitle.preferredMaxLayoutWidth = Layout.pageWidth - 36
 
         awayNoteToggle.target = self
         awayNoteToggle.action = #selector(awayNoteToggled(_:))
@@ -245,6 +519,7 @@ final class AwayoSettingsWindowController: NSWindowController {
         awayNoteField.bezelStyle = .roundedBezel
         awayNoteField.target = self
         awayNoteField.action = #selector(awayNoteChanged(_:))
+        awayNoteField.delegate = self
         awayNoteField.translatesAutoresizingMaskIntoConstraints = false
 
         stack.addArrangedSubview(title)
@@ -253,13 +528,13 @@ final class AwayoSettingsWindowController: NSWindowController {
         stack.addArrangedSubview(awayNoteField)
 
         NSLayoutConstraint.activate([
-            awayNoteField.widthAnchor.constraint(equalToConstant: 520),
+            awayNoteField.widthAnchor.constraint(equalToConstant: Layout.pageWidth - 36),
 
             stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 18),
             stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -18),
             stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 18),
             stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -18),
-            card.widthAnchor.constraint(equalToConstant: 940)
+            card.widthAnchor.constraint(equalToConstant: Layout.pageWidth)
         ])
 
         refreshAwayNoteControls()
@@ -269,12 +544,12 @@ final class AwayoSettingsWindowController: NSWindowController {
     private func hotKeySection() -> NSView {
         let card = cardView()
 
-        let row = NSStackView()
-        row.orientation = .horizontal
-        row.alignment = .centerY
-        row.spacing = 18
-        row.translatesAutoresizingMaskIntoConstraints = false
-        card.addSubview(row)
+        let stack = NSStackView()
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 14
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(stack)
 
         let icon = NSTextField(labelWithString: "⌘")
         icon.font = .systemFont(ofSize: 30, weight: .black)
@@ -297,7 +572,10 @@ final class AwayoSettingsWindowController: NSWindowController {
         hotKeyStatusLabel.font = .systemFont(ofSize: 13, weight: .medium)
         hotKeyStatusLabel.textColor = .secondaryLabelColor
         hotKeyStatusLabel.maximumNumberOfLines = 2
-        hotKeyStatusLabel.preferredMaxLayoutWidth = 520
+        hotKeyStatusLabel.preferredMaxLayoutWidth = 310
+        hotKeyStatusLabel.lineBreakMode = .byWordWrapping
+        hotKeyStatusLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        copy.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         copy.addArrangedSubview(title)
         copy.addArrangedSubview(hotKeyStatusLabel)
@@ -307,28 +585,38 @@ final class AwayoSettingsWindowController: NSWindowController {
         hotKeyButton.bezelStyle = .rounded
         hotKeyButton.controlSize = .large
         hotKeyButton.font = .systemFont(ofSize: 14, weight: .bold)
+        hotKeyButton.widthAnchor.constraint(equalToConstant: 132).isActive = true
 
         hotKeyClearButton.target = self
         hotKeyClearButton.action = #selector(clearHotKey)
         hotKeyClearButton.bezelStyle = .rounded
         hotKeyClearButton.controlSize = .large
         hotKeyClearButton.font = .systemFont(ofSize: 14, weight: .semibold)
+        hotKeyClearButton.widthAnchor.constraint(equalToConstant: 64).isActive = true
 
-        row.addArrangedSubview(icon)
-        row.addArrangedSubview(copy)
-        row.addArrangedSubview(NSView())
-        row.addArrangedSubview(hotKeyClearButton)
-        row.addArrangedSubview(hotKeyButton)
+        let topRow = NSStackView(views: [icon, copy])
+        topRow.orientation = .horizontal
+        topRow.alignment = .centerY
+        topRow.spacing = 16
+
+        let actionRow = NSStackView(views: [NSView(), hotKeyClearButton, hotKeyButton])
+        actionRow.orientation = .horizontal
+        actionRow.alignment = .centerY
+        actionRow.spacing = 10
+        actionRow.widthAnchor.constraint(equalToConstant: Layout.setupCardWidth - 36).isActive = true
+
+        stack.addArrangedSubview(topRow)
+        stack.addArrangedSubview(actionRow)
 
         NSLayoutConstraint.activate([
             icon.widthAnchor.constraint(equalToConstant: 58),
             icon.heightAnchor.constraint(equalToConstant: 58),
 
-            row.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 18),
-            row.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -18),
-            row.topAnchor.constraint(equalTo: card.topAnchor, constant: 18),
-            row.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -18),
-            card.widthAnchor.constraint(equalToConstant: 940)
+            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 18),
+            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -18),
+            stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 18),
+            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -18),
+            card.widthAnchor.constraint(equalToConstant: Layout.setupCardWidth)
         ])
 
         refreshHotKeyControls()
@@ -338,12 +626,12 @@ final class AwayoSettingsWindowController: NSWindowController {
     private func cameraGagSection() -> NSView {
         let card = cardView()
 
-        let row = NSStackView()
-        row.orientation = .horizontal
-        row.alignment = .centerY
-        row.spacing = 18
-        row.translatesAutoresizingMaskIntoConstraints = false
-        card.addSubview(row)
+        let stack = NSStackView()
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 14
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(stack)
 
         let icon = NSTextField(labelWithString: "!")
         icon.font = .monospacedSystemFont(ofSize: 30, weight: .black)
@@ -359,15 +647,16 @@ final class AwayoSettingsWindowController: NSWindowController {
         copy.alignment = .leading
         copy.spacing = 4
 
-        let title = NSTextField(labelWithString: "Screen Snapshot Camera Gag")
+        let title = NSTextField(labelWithString: "NICE TRY Camera")
         title.font = .systemFont(ofSize: 17, weight: .bold)
         title.textColor = .labelColor
 
-        let subtitle = NSTextField(labelWithString: "Optional. When enabled, moving around in Screen Snapshot mode shows a visible countdown and then tries to pin a NICE TRY camera photo.")
+        let subtitle = NSTextField(labelWithString: "Optional visible camera gag for Screen Snapshot mode.")
         subtitle.font = .systemFont(ofSize: 13, weight: .medium)
         subtitle.textColor = .secondaryLabelColor
         subtitle.maximumNumberOfLines = 2
-        subtitle.preferredMaxLayoutWidth = 650
+        subtitle.preferredMaxLayoutWidth = 310
+        subtitle.lineBreakMode = .byWordWrapping
 
         cameraGagToggle.target = self
         cameraGagToggle.action = #selector(cameraGagToggled(_:))
@@ -376,24 +665,168 @@ final class AwayoSettingsWindowController: NSWindowController {
         copy.addArrangedSubview(title)
         copy.addArrangedSubview(subtitle)
 
-        row.addArrangedSubview(icon)
-        row.addArrangedSubview(copy)
-        row.addArrangedSubview(NSView())
-        row.addArrangedSubview(cameraGagToggle)
+        let topRow = NSStackView(views: [icon, copy])
+        topRow.orientation = .horizontal
+        topRow.alignment = .centerY
+        topRow.spacing = 16
+
+        let actionRow = NSStackView(views: [NSView(), cameraGagToggle])
+        actionRow.orientation = .horizontal
+        actionRow.alignment = .centerY
+        actionRow.widthAnchor.constraint(equalToConstant: Layout.setupCardWidth - 36).isActive = true
+
+        stack.addArrangedSubview(topRow)
+        stack.addArrangedSubview(actionRow)
 
         NSLayoutConstraint.activate([
             icon.widthAnchor.constraint(equalToConstant: 58),
             icon.heightAnchor.constraint(equalToConstant: 58),
 
-            row.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 18),
-            row.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -18),
-            row.topAnchor.constraint(equalTo: card.topAnchor, constant: 18),
-            row.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -18),
-            card.widthAnchor.constraint(equalToConstant: 940)
+            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 18),
+            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -18),
+            stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 18),
+            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -18),
+            card.widthAnchor.constraint(equalToConstant: Layout.setupCardWidth)
         ])
 
         refreshCameraGagControls()
         return card
+    }
+
+    private func permissionSection() -> NSView {
+        let card = cardView()
+
+        let stack = NSStackView()
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 14
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(stack)
+
+        let header = NSStackView()
+        header.orientation = .horizontal
+        header.alignment = .centerY
+        header.spacing = 10
+
+        let title = NSTextField(labelWithString: "Permissions")
+        title.font = .systemFont(ofSize: 17, weight: .bold)
+        title.textColor = .labelColor
+
+        let note = NSTextField(labelWithString: "macOS may ask you to quit and reopen Awayo after Screen Recording changes.")
+        note.font = .systemFont(ofSize: 12, weight: .medium)
+        note.textColor = .secondaryLabelColor
+
+        header.addArrangedSubview(title)
+        header.addArrangedSubview(NSView())
+        header.addArrangedSubview(note)
+
+        let row = NSStackView()
+        row.orientation = .horizontal
+        row.alignment = .top
+        row.spacing = 14
+
+        row.addArrangedSubview(permissionItem(
+            icon: "screen",
+            title: "Screen Snapshot",
+            body: "Required for the screen-as-background mode.",
+            statusLabel: screenRecordingStatusLabel,
+            buttonTitle: "Open Settings",
+            action: #selector(requestScreenRecordingPermissionFromSettings)
+        ))
+        row.addArrangedSubview(permissionItem(
+            icon: "camera",
+            title: "NICE TRY Camera",
+            body: "Needed only when the camera gag is enabled.",
+            statusLabel: cameraPermissionStatusLabel,
+            buttonTitle: "Camera Settings",
+            action: #selector(openCameraPrivacySettings)
+        ))
+
+        stack.addArrangedSubview(header)
+        stack.addArrangedSubview(row)
+
+        NSLayoutConstraint.activate([
+            card.widthAnchor.constraint(equalToConstant: Layout.pageWidth),
+
+            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 18),
+            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -18),
+            stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 18),
+            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -18)
+        ])
+
+        refreshPermissionControls()
+        return card
+    }
+
+    private func permissionItem(
+        icon: String,
+        title: String,
+        body: String,
+        statusLabel: NSTextField,
+        buttonTitle: String,
+        action: Selector
+    ) -> NSView {
+        let view = NSView()
+        view.wantsLayer = true
+        view.layer?.backgroundColor = NSColor.textBackgroundColor.withAlphaComponent(0.34).cgColor
+        view.layer?.cornerRadius = 10
+        view.layer?.borderWidth = 1
+        view.layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.28).cgColor
+        view.translatesAutoresizingMaskIntoConstraints = false
+
+        let stack = NSStackView()
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 8
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(stack)
+
+        let top = NSStackView()
+        top.orientation = .horizontal
+        top.alignment = .centerY
+        top.spacing = 8
+
+        let iconLabel = NSTextField(labelWithString: icon)
+        iconLabel.font = .monospacedSystemFont(ofSize: 12, weight: .black)
+        iconLabel.textColor = NSColor(calibratedRed: 1.0, green: 0.82, blue: 0.22, alpha: 1)
+
+        let titleLabel = NSTextField(labelWithString: title)
+        titleLabel.font = .systemFont(ofSize: 14, weight: .bold)
+        titleLabel.textColor = .labelColor
+
+        top.addArrangedSubview(iconLabel)
+        top.addArrangedSubview(titleLabel)
+
+        let bodyLabel = NSTextField(labelWithString: body)
+        bodyLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        bodyLabel.textColor = .secondaryLabelColor
+        bodyLabel.maximumNumberOfLines = 2
+        bodyLabel.preferredMaxLayoutWidth = Layout.permissionItemWidth - 28
+        bodyLabel.lineBreakMode = .byWordWrapping
+
+        statusLabel.font = .monospacedSystemFont(ofSize: 11, weight: .heavy)
+        statusLabel.textColor = .secondaryLabelColor
+
+        let button = NSButton(title: buttonTitle, target: self, action: action)
+        button.bezelStyle = .rounded
+        button.controlSize = .regular
+        button.font = .systemFont(ofSize: 12, weight: .semibold)
+        button.widthAnchor.constraint(equalToConstant: 132).isActive = true
+
+        stack.addArrangedSubview(top)
+        stack.addArrangedSubview(bodyLabel)
+        stack.addArrangedSubview(statusLabel)
+        stack.addArrangedSubview(button)
+
+        NSLayoutConstraint.activate([
+            view.widthAnchor.constraint(equalToConstant: Layout.permissionItemWidth),
+            stack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 14),
+            stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -14),
+            stack.topAnchor.constraint(equalTo: view.topAnchor, constant: 14),
+            stack.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -14)
+        ])
+
+        return view
     }
 
     private func sectionTitle(_ title: String, _ subtitle: String) -> NSView {
@@ -403,11 +836,11 @@ final class AwayoSettingsWindowController: NSWindowController {
         stack.spacing = 4
 
         let titleLabel = NSTextField(labelWithString: title)
-        titleLabel.font = .systemFont(ofSize: 20, weight: .black)
+        titleLabel.font = .systemFont(ofSize: 17, weight: .bold)
         titleLabel.textColor = .labelColor
 
         let subtitleLabel = NSTextField(labelWithString: subtitle)
-        subtitleLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        subtitleLabel.font = .systemFont(ofSize: 12, weight: .medium)
         subtitleLabel.textColor = .secondaryLabelColor
 
         stack.addArrangedSubview(titleLabel)
@@ -426,7 +859,7 @@ final class AwayoSettingsWindowController: NSWindowController {
         grid.setContentCompressionResistancePriority(.required, for: .horizontal)
 
         let tiles = makeTiles(for: category)
-        tiles.chunked(into: 4).forEach { rowTiles in
+        tiles.chunked(into: Layout.previewGridColumns).forEach { rowTiles in
             let row = NSStackView(views: rowTiles)
             row.orientation = .horizontal
             row.alignment = .centerY
@@ -452,13 +885,28 @@ final class AwayoSettingsWindowController: NSWindowController {
     private func makeTiles(for category: AwayoPreviewCategory) -> [AwayoPreviewTile] {
         switch category {
         case .background:
-            AwayoLockStyle.allCases.map { tile(category: category, rawValue: $0.rawValue, title: $0.title) }
+            let backgroundOrder: [AwayoLockStyle] = [
+                .solidColor,
+                .softWash,
+                .stripes,
+                .polkaDots,
+                .screenSnapshot,
+                .duckPond,
+                .offlineRunner,
+                .cosmicDesk,
+                .rainyWindow,
+                .arcadePulse,
+                .paperNotes,
+                .synthwave,
+                .neonFlow
+            ]
+            return backgroundOrder.map { tile(category: category, rawValue: $0.rawValue, title: $0.title) }
         case .timer:
-            AwayoTimerStyle.allCases.map { tile(category: category, rawValue: $0.rawValue, title: $0.title) }
+            return AwayoTimerStyle.allCases.map { tile(category: category, rawValue: $0.rawValue, title: $0.title) }
         case .dashboard:
-            AwayoDashboardStyle.allCases.map { tile(category: category, rawValue: $0.rawValue, title: $0.title) }
+            return AwayoDashboardStyle.allCases.map { tile(category: category, rawValue: $0.rawValue, title: $0.title) }
         case .note:
-            AwayoNoteStyle.allCases.map { tile(category: category, rawValue: $0.rawValue, title: $0.title) }
+            return AwayoNoteStyle.allCases.map { tile(category: category, rawValue: $0.rawValue, title: $0.title) }
         }
     }
 
@@ -470,24 +918,6 @@ final class AwayoSettingsWindowController: NSWindowController {
         tile.widthAnchor.constraint(equalToConstant: Layout.previewTileWidth).isActive = true
         tile.heightAnchor.constraint(equalToConstant: Layout.previewTileHeight).isActive = true
         return tile
-    }
-
-    private func doneRow() -> NSView {
-        let row = NSStackView()
-        row.orientation = .horizontal
-        row.alignment = .centerY
-        row.spacing = 12
-
-        let spacer = NSView()
-        let done = NSButton(title: "Done", target: self, action: #selector(done))
-        done.bezelStyle = .rounded
-        done.controlSize = .large
-        done.font = .systemFont(ofSize: 14, weight: .bold)
-
-        row.addArrangedSubview(spacer)
-        row.addArrangedSubview(done)
-        row.widthAnchor.constraint(equalToConstant: 940).isActive = true
-        return row
     }
 
     private func customColorControl() -> NSView {
@@ -521,13 +951,21 @@ final class AwayoSettingsWindowController: NSWindowController {
 
     @objc private func awayNoteChanged(_ sender: NSTextField) {
         settingsStore.saveAwayMessage(sender.stringValue)
-        refreshAwayNoteControls()
+    }
+
+    func controlTextDidChange(_ notification: Notification) {
+        guard let field = notification.object as? NSTextField, field === awayNoteField else {
+            return
+        }
+
+        settingsStore.saveAwayMessage(field.stringValue)
     }
 
     @objc private func cameraGagToggled(_ sender: NSButton) {
         guard sender.state == .on else {
             settingsStore.saveCameraGagEnabled(false)
             refreshCameraGagControls()
+            refreshPermissionControls()
             return
         }
 
@@ -576,6 +1014,7 @@ final class AwayoSettingsWindowController: NSWindowController {
         }
 
         refreshSelections()
+        refreshPermissionControls()
     }
 
     private func requestCameraPermissionThenEnableGag() {
@@ -583,6 +1022,7 @@ final class AwayoSettingsWindowController: NSWindowController {
         case .authorized:
             settingsStore.saveCameraGagEnabled(true)
             refreshCameraGagControls()
+            refreshPermissionControls()
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
                 Task { @MainActor [weak self] in
@@ -592,6 +1032,7 @@ final class AwayoSettingsWindowController: NSWindowController {
 
                     self.settingsStore.saveCameraGagEnabled(granted)
                     self.refreshCameraGagControls()
+                    self.refreshPermissionControls()
                     if !granted {
                         self.showError("Camera access was not granted, so the NICE TRY camera snap stayed off.")
                     }
@@ -600,21 +1041,42 @@ final class AwayoSettingsWindowController: NSWindowController {
         case .denied, .restricted:
             settingsStore.saveCameraGagEnabled(false)
             refreshCameraGagControls()
+            refreshPermissionControls()
             showError("Camera access is off for Awayo. Enable it in System Settings > Privacy & Security > Camera, then turn this setting on again.")
         @unknown default:
             settingsStore.saveCameraGagEnabled(false)
             refreshCameraGagControls()
+            refreshPermissionControls()
         }
     }
 
     private func requestScreenSnapshotPermission() {
         guard !CGPreflightScreenCaptureAccess() else {
+            refreshPermissionControls()
             return
         }
 
         if !CGRequestScreenCaptureAccess() {
             showError("Screen Snapshot needs Screen Recording permission. macOS may ask now; if it asks you to reopen Awayo, quit and open Awayo once.")
         }
+        refreshPermissionControls()
+    }
+
+    @objc private func requestScreenRecordingPermissionFromSettings() {
+        requestScreenSnapshotPermission()
+        openPrivacyPane("Privacy_ScreenCapture")
+    }
+
+    @objc private func openCameraPrivacySettings() {
+        openPrivacyPane("Privacy_Camera")
+    }
+
+    private func openPrivacyPane(_ pane: String) {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)") else {
+            return
+        }
+
+        NSWorkspace.shared.open(url)
     }
 
     @objc private func chooseSolidBackgroundColor() {
@@ -930,6 +1392,34 @@ final class AwayoSettingsWindowController: NSWindowController {
         cameraGagToggle.state = settingsStore.cameraGagEnabled() ? .on : .off
     }
 
+    private func refreshPermissionControls() {
+        let readyColor = NSColor(calibratedRed: 0.46, green: 0.92, blue: 0.55, alpha: 1)
+        let needsColor = NSColor(calibratedRed: 1.0, green: 0.73, blue: 0.26, alpha: 1)
+
+        if CGPreflightScreenCaptureAccess() {
+            screenRecordingStatusLabel.stringValue = "READY"
+            screenRecordingStatusLabel.textColor = readyColor
+        } else {
+            screenRecordingStatusLabel.stringValue = "NEEDS SCREEN RECORDING"
+            screenRecordingStatusLabel.textColor = needsColor
+        }
+
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            cameraPermissionStatusLabel.stringValue = "READY"
+            cameraPermissionStatusLabel.textColor = readyColor
+        case .notDetermined:
+            cameraPermissionStatusLabel.stringValue = "ASKS WHEN ENABLED"
+            cameraPermissionStatusLabel.textColor = needsColor
+        case .denied, .restricted:
+            cameraPermissionStatusLabel.stringValue = "NEEDS CAMERA ACCESS"
+            cameraPermissionStatusLabel.textColor = needsColor
+        @unknown default:
+            cameraPermissionStatusLabel.stringValue = "UNKNOWN"
+            cameraPermissionStatusLabel.textColor = .secondaryLabelColor
+        }
+    }
+
     private func refreshHotKeyControls() {
         if let hotKey = settingsStore.hotKey() {
             hotKeyStatusLabel.stringValue = "\(hotKey.displayString) starts Awayo Lock until stopped."
@@ -951,31 +1441,14 @@ final class AwayoSettingsWindowController: NSWindowController {
         passcodeButton.title = passcodeStore.hasPasscode() ? "Change Passcode" : "Set Passcode"
     }
 
-    private func refreshHeader() {
-        if onboarding {
-            headerTitleLabel.stringValue = "don't let your agents die."
-            headerSubtitleLabel.stringValue = "Set a passcode, pick the look, and keep your Mac awake behind Awayo Lock."
-        } else {
-            headerTitleLabel.stringValue = "don't let your agents die."
-            headerSubtitleLabel.stringValue = "Keep your Mac awake behind Awayo Lock. Pick the passcode, styles, notes, and timer once."
-        }
-    }
-
     private func cardView() -> NSView {
         let view = NSView()
         view.wantsLayer = true
-        view.layer?.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.68).cgColor
-        view.layer?.cornerRadius = 8
+        view.layer?.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.48).cgColor
+        view.layer?.cornerRadius = 10
         view.layer?.borderWidth = 1
-        view.layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.45).cgColor
+        view.layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.35).cgColor
         return view
-    }
-
-    private func label(_ text: String) -> NSTextField {
-        let label = NSTextField(labelWithString: text)
-        label.font = .systemFont(ofSize: 11, weight: .semibold)
-        label.textColor = .secondaryLabelColor
-        return label
     }
 
     private func showError(_ message: String) {
@@ -984,6 +1457,82 @@ final class AwayoSettingsWindowController: NSWindowController {
         alert.informativeText = message
         alert.alertStyle = .warning
         alert.runModal()
+    }
+}
+
+@MainActor
+private final class AwayoFlippedView: NSView {
+    override var isFlipped: Bool {
+        true
+    }
+}
+
+@MainActor
+private final class AwayoSidebarButton: NSButton {
+    var isPicked = false {
+        didSet {
+            needsDisplay = true
+        }
+    }
+
+    private let itemTitle: String
+    private let itemSubtitle: String
+    private let symbolName: String
+
+    override var isFlipped: Bool {
+        true
+    }
+
+    init(title: String, subtitle: String, symbolName: String) {
+        self.itemTitle = title
+        self.itemSubtitle = subtitle
+        self.symbolName = symbolName
+        super.init(frame: .zero)
+
+        self.title = ""
+        isBordered = false
+        setButtonType(.momentaryChange)
+        wantsLayer = true
+        toolTip = title
+        setAccessibilityLabel(title)
+        setAccessibilityHelp(subtitle)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let rect = bounds.insetBy(dx: 0, dy: 1)
+        if isPicked {
+            NSColor.selectedContentBackgroundColor.withAlphaComponent(0.16).setFill()
+            NSBezierPath(roundedRect: rect, xRadius: 9, yRadius: 9).fill()
+
+            NSColor.controlAccentColor.setFill()
+            NSBezierPath(roundedRect: NSRect(x: rect.minX, y: rect.minY + 8, width: 3, height: rect.height - 16), xRadius: 1.5, yRadius: 1.5).fill()
+        } else if cell?.isHighlighted == true {
+            NSColor.labelColor.withAlphaComponent(0.06).setFill()
+            NSBezierPath(roundedRect: rect, xRadius: 9, yRadius: 9).fill()
+        }
+
+        let titleColor = isPicked ? NSColor.labelColor : NSColor.secondaryLabelColor
+        let subtitleColor = isPicked ? NSColor.secondaryLabelColor : NSColor.tertiaryLabelColor
+
+        itemTitle.draw(
+            in: NSRect(x: rect.minX + 14, y: rect.minY + 6, width: rect.width - 24, height: 18),
+            withAttributes: [
+                .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
+                .foregroundColor: titleColor
+            ]
+        )
+
+        itemSubtitle.draw(
+            in: NSRect(x: rect.minX + 14, y: rect.minY + 24, width: rect.width - 24, height: 14),
+            withAttributes: [
+                .font: NSFont.systemFont(ofSize: 10, weight: .medium),
+                .foregroundColor: subtitleColor
+            ]
+        )
     }
 }
 
