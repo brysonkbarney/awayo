@@ -51,6 +51,7 @@ final class AwayoController: NSObject {
 
     private func refreshMenu() {
         let menu = NSMenu()
+        let settingsAvailable = session?.mode != .privacy
 
         if let session {
             let status = NSMenuItem(title: "\(session.mode.title): \(remainingLabel(for: session))", action: nil, keyEquivalent: "")
@@ -66,7 +67,9 @@ final class AwayoController: NSObject {
             suffix: "..."
         )
         privacyMenu.addItem(NSMenuItem.separator())
-        privacyMenu.addItem(menuItem(title: "Awayo Settings...", action: #selector(openSettings), symbol: "gearshape"))
+        let privacySettingsItem = menuItem(title: "Awayo Settings...", action: #selector(openSettings), symbol: "gearshape")
+        privacySettingsItem.isEnabled = settingsAvailable
+        privacyMenu.addItem(privacySettingsItem)
         let privacyItem = submenuItem(title: "Awayo Lock", symbol: "lock.rectangle")
         menu.addItem(privacyItem)
         menu.setSubmenu(privacyMenu, for: privacyItem)
@@ -82,7 +85,9 @@ final class AwayoController: NSObject {
         menu.setSubmenu(awakeMenu, for: awakeItem)
 
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(menuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ",", symbol: "gearshape"))
+        let settingsItem = menuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ",", symbol: "gearshape")
+        settingsItem.isEnabled = settingsAvailable
+        menu.addItem(settingsItem)
         menu.addItem(menuItem(title: "Custom Duration...", action: #selector(startCustomDuration), symbol: "timer"))
 
         if session != nil {
@@ -144,6 +149,8 @@ final class AwayoController: NSObject {
         }
 
         let message = settingsStore.lockMessage()
+        settingsWindowController.close()
+
         guard startSession(mode: .privacy, duration: duration, message: message) else {
             return
         }
@@ -212,6 +219,10 @@ final class AwayoController: NSObject {
     }
 
     private func showSettings(onboarding: Bool) {
+        guard session?.mode != .privacy else {
+            return
+        }
+
         settingsWindowController.show(onboarding: onboarding)
     }
 
