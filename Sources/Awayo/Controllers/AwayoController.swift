@@ -149,8 +149,9 @@ final class AwayoController: NSObject {
         startPrivacyCover(duration: duration(from: sender))
     }
 
-    private func startPrivacyCoverFromHotKey() {
-        guard session?.mode != .privacy else {
+    private func togglePrivacyCoverFromHotKey() {
+        if session?.mode == .privacy {
+            stopSession()
             return
         }
 
@@ -194,7 +195,7 @@ final class AwayoController: NSObject {
         do {
             try hotKeyManager.register(settingsStore.hotKey()) { [weak self] in
                 Task { @MainActor [weak self] in
-                    self?.startPrivacyCoverFromHotKey()
+                    self?.togglePrivacyCoverFromHotKey()
                 }
             }
         } catch {

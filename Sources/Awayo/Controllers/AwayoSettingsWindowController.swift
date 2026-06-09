@@ -1163,7 +1163,7 @@ final class AwayoSettingsWindowController: NSWindowController, NSTextFieldDelega
         title.font = .systemFont(ofSize: 22, weight: .black)
         title.textColor = .labelColor
 
-        let subtitle = NSTextField(labelWithString: "Use at least Command, Control, or Option. The shortcut starts Awayo Lock until stopped.")
+        let subtitle = NSTextField(labelWithString: "Use at least Command, Control, or Option. Press once to lock, then press again to unlock.")
         subtitle.font = .systemFont(ofSize: 13, weight: .medium)
         subtitle.textColor = .secondaryLabelColor
         subtitle.maximumNumberOfLines = 2
@@ -1422,12 +1422,12 @@ final class AwayoSettingsWindowController: NSWindowController, NSTextFieldDelega
 
     private func refreshHotKeyControls() {
         if let hotKey = settingsStore.hotKey() {
-            hotKeyStatusLabel.stringValue = "\(hotKey.displayString) starts Awayo Lock until stopped."
+            hotKeyStatusLabel.stringValue = "\(hotKey.displayString) locks and unlocks Awayo."
             hotKeyButton.title = "Change Hotkey"
             hotKeyClearButton.isEnabled = true
             hotKeyClearButton.alphaValue = 1
         } else {
-            hotKeyStatusLabel.stringValue = "No hotkey set. Add one for quick Awayo Lock from anywhere."
+            hotKeyStatusLabel.stringValue = "No hotkey set. Add one to lock and unlock from anywhere."
             hotKeyButton.title = "Set Hotkey"
             hotKeyClearButton.isEnabled = false
             hotKeyClearButton.alphaValue = 0.45
