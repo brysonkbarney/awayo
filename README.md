@@ -42,7 +42,7 @@ Current Awayo Lock styles:
 
 ## Install
 
-Run this on macOS:
+Run this on macOS 13 or newer:
 
 ```sh
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/brysonkbarney/awayo/main/Scripts/install.sh)"

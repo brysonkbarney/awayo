@@ -10,8 +10,13 @@ RESOURCES_DIR="$CONTENTS_DIR/Resources"
 VERSION="$(tr -d '[:space:]' < "$ROOT_DIR/VERSION")"
 BUILD_NUMBER="${AWAYO_BUILD_NUMBER:-}"
 CODE_REQUIREMENT='=designated => identifier "app.awayo.Awayo"'
+SWIFT_ARCH_FLAGS=()
 
 cd "$ROOT_DIR"
+
+if [[ "${AWAYO_UNIVERSAL:-1}" == "1" ]]; then
+  SWIFT_ARCH_FLAGS=(--arch arm64 --arch x86_64)
+fi
 
 if [[ -z "$BUILD_NUMBER" ]]; then
   if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
@@ -21,8 +26,8 @@ if [[ -z "$BUILD_NUMBER" ]]; then
   fi
 fi
 
-swift build -c release --product "$APP_NAME"
-BIN_DIR="$(swift build -c release --show-bin-path | tail -n 1)"
+swift build -c release "${SWIFT_ARCH_FLAGS[@]}" --product "$APP_NAME"
+BIN_DIR="$(swift build -c release "${SWIFT_ARCH_FLAGS[@]}" --show-bin-path | tail -n 1)"
 
 rm -rf "$APP_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"

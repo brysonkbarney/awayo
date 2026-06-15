@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "Awayo",
     platforms: [
-        .macOS(.v14)
+        .macOS(.v13)
     ],
     products: [
         .executable(
